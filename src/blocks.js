@@ -118,11 +118,8 @@ export function getTexCoord(id, face) {
 }
 
 // ── Hotbar / inventory ─────────────────────────────────────────────────────────
-// Tools occupy the first 3 slots so they're ready from the start
-export const DEFAULT_HOTBAR = [
-  TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL,
-  GRASS, DIRT, STONE, WOOD, PLANKS, GLASS,
-];
+// Player starts with an empty hotbar — pick up tools/blocks by mining or via inventory (E)
+export const DEFAULT_HOTBAR = [AIR, AIR, AIR, AIR, AIR, AIR, AIR, AIR, AIR];
 
 export const ALL_BLOCKS = [
   GRASS, DIRT, STONE, SAND, GRAVEL, WOOD, LEAVES, PLANKS,

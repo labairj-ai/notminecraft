@@ -314,10 +314,9 @@ export class Player {
 
   spawn(world) {
     if (this.spawned) return;
-    // Wait until spawn chunk is loaded
-    const spawnY = world.getSpawnY(8, 8);
-    if (spawnY > 1) {
-      this.pos.set(8, spawnY, 8);
+    const land = world.findLandSpawn();
+    if (land) {
+      this.pos.set(land.x, land.y, land.z);
       this.spawned = true;
     }
   }

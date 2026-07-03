@@ -163,10 +163,28 @@ export class World {
     return null;
   }
 
-  getSpawnY(wx, wz) {
-    for (let y = CHUNK_HEIGHT - 1; y > 0; y--) {
-      if (B.isSolid(this.getBlock(wx, y, wz))) return y + 2;
+  // Searches outward from (8,8) in 4-block steps until it finds a surface block
+  // that sits above SEA_LEVEL (i.e. dry land).  Returns null if no loaded chunk
+  // has land yet — caller retries next frame.
+  findLandSpawn() {
+    for (let r = 0; r <= 12; r++) {
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dz = -r; dz <= r; dz++) {
+          if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue; // only the shell
+          const wx = 8 + dx * 4;
+          const wz = 8 + dz * 4;
+          const cx = Math.floor(wx / CHUNK_SIZE);
+          const cz = Math.floor(wz / CHUNK_SIZE);
+          if (!this.chunks.has(this.key(cx, cz))) continue;
+          // Scan downward from just above sea level — any solid block here is land
+          for (let y = CHUNK_HEIGHT - 1; y > SEA_LEVEL; y--) {
+            if (B.isSolid(this.getBlock(wx, y, wz))) {
+              return { x: wx + 0.5, y: y + 2, z: wz + 0.5 };
+            }
+          }
+        }
+      }
     }
-    return SEA_LEVEL + 3;
+    return null; // no land found in loaded chunks yet
   }
 }
