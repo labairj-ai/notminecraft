@@ -32,6 +32,7 @@ export class Player {
 
     this.target  = null; // { wx, wy, wz, face }
     this.breakProgress = 0;
+    this.breakTime     = 0.6;
     this.breakTarget   = null;
 
     this.keys    = {};
@@ -111,9 +112,11 @@ export class Player {
     if (!this.target) return;
     const { wx, wy, wz } = this.target;
     const id = this.world.getBlock(wx, wy, wz);
-    if (B.getDef(id)?.unbreakable) return;
-    this.breakTarget   = { wx, wy, wz };
+    const def = B.getDef(id);
+    if (def?.unbreakable) return;
+    this.breakTarget   = { wx, wy, wz, id };
     this.breakProgress = 0;
+    this.breakTime     = def?.breakTime ?? 0.6;
   }
 
   _placeBlock() {
@@ -233,18 +236,16 @@ export class Player {
 
   _updateBreaking(dt) {
     if (!this.breakTarget) return;
-    const { wx, wy, wz } = this.breakTarget;
+    const { wx, wy, wz, id: breakId } = this.breakTarget;
     // Cancel if look moved away
     if (!this.target || this.target.wx !== wx || this.target.wy !== wy || this.target.wz !== wz) {
       this.breakTarget = null; this.breakProgress = 0; return;
     }
     this.breakProgress += dt;
-    const breakTime = 0.6; // seconds
-    if (this.breakProgress >= breakTime) {
+    if (this.breakProgress >= this.breakTime) {
       const id = this.world.getBlock(wx, wy, wz);
       if (id !== B.AIR && !B.getDef(id)?.unbreakable) {
         this.world.setBlock(wx, wy, wz, B.AIR);
-        // Auto-add to hotbar if slot is empty
         const empty = this.hotbar.findIndex(b => b === B.AIR || !b);
         if (empty >= 0) this.hotbar[empty] = id;
       }
@@ -270,7 +271,17 @@ export class Player {
 
   getBreakProgress() {
     if (!this.breakTarget) return 0;
-    return Math.min(1, this.breakProgress / 0.6);
+    return Math.min(1, this.breakProgress / this.breakTime);
+  }
+
+  getBreakInfo() {
+    if (!this.breakTarget) return null;
+    const def = B.getDef(this.breakTarget.id);
+    return {
+      fraction: this.getBreakProgress(),
+      action: def?.action || 'break',
+      name: def?.name || '',
+    };
   }
 
   spawn(world) {

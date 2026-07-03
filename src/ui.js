@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BLOCK_DEFS, ALL_BLOCKS, AIR } from './blocks.js';
+import { BLOCK_DEFS, ALL_BLOCKS, AIR, ACTION_LABELS } from './blocks.js';
 import { createAtlas, ATLAS_COLS, ATLAS_ROWS, TEX_SIZE } from './textures.js';
 
 export class UI {
@@ -7,16 +7,23 @@ export class UI {
     this.player = player;
     this.world  = world;
 
-    this.overlay    = document.getElementById('overlay');
-    this.hotbarEl   = document.getElementById('hotbar');
-    this.slots      = Array.from(document.querySelectorAll('#hotbar .slot'));
-    this.healthEl   = document.getElementById('health-bar');
-    this.blockNameEl= document.getElementById('block-name');
-    this.debugEl    = document.getElementById('debug-info');
-    this.coordsEl   = document.getElementById('coords');
-    this.invScreen  = document.getElementById('inventory-screen');
-    this.invGrid    = document.getElementById('inventory-grid');
-    this.invHotbar  = document.getElementById('inventory-hotbar');
+    this.overlay      = document.getElementById('overlay');
+    this.hotbarEl     = document.getElementById('hotbar');
+    this.slots        = Array.from(document.querySelectorAll('#hotbar .slot'));
+    this.healthEl     = document.getElementById('health-bar');
+    this.blockNameEl  = document.getElementById('block-name');
+    this.debugEl      = document.getElementById('debug-info');
+    this.coordsEl     = document.getElementById('coords');
+    this.invScreen    = document.getElementById('inventory-screen');
+    this.invGrid      = document.getElementById('inventory-grid');
+    this.invHotbar    = document.getElementById('inventory-hotbar');
+
+    // Break action UI
+    this.actionEl     = document.getElementById('action-indicator');
+    this.actionLabel  = document.getElementById('action-label');
+    this.actionBarFill= document.getElementById('action-bar-fill');
+    this.breakRingFg  = document.getElementById('break-ring-fg');
+    this._ringCirc    = 106.8; // 2π × 17
 
     this._blockNameTimer = 0;
     this._lastSlot = -1;
@@ -160,6 +167,20 @@ export class UI {
     return !this.invScreen.classList.contains('hidden');
   }
 
+  _ringColor(action) {
+    return { dig:'#e8d99b', chop:'#c8a264', mine:'#5be8e8', break:'#fff' }[action] || '#fff';
+  }
+
+  _barGradient(action, progress) {
+    const colors = {
+      dig:   ['#c8a060', '#e8d99b'],
+      chop:  ['#8B5E3C', '#c8a264'],
+      mine:  ['#30a0a0', '#5be8e8'],
+      break: ['#aaa',    '#fff'],
+    }[action] || ['#aaa','#fff'];
+    return `linear-gradient(to right, ${colors[0]}, ${colors[1]})`;
+  }
+
   show() { this.overlay.classList.add('active'); }
   hide() { this.overlay.classList.remove('active'); }
 
@@ -190,9 +211,35 @@ export class UI {
       this.healthEl.appendChild(h);
     }
 
-    // Break progress overlay on target block
-    const bp = p.getBreakProgress();
-    document.getElementById('crosshair').textContent = bp > 0 ? '⊕' : '+';
+    // Break ring + action indicator
+    const info = p.getBreakInfo();
+    const bp   = info ? info.fraction : 0;
+
+    if (info && bp > 0) {
+      // Crosshair pulse
+      document.getElementById('crosshair').textContent = '+';
+
+      // Progress ring (stroke-dashoffset sweeps from full → 0 as progress 0→1)
+      this.breakRingFg.style.strokeDashoffset = (this._ringCirc * (1 - bp)).toFixed(2);
+      this.breakRingFg.style.stroke = this._ringColor(info.action);
+
+      // Action label e.g. "Mining Diamond Ore"
+      const verb = ACTION_LABELS[info.action] || 'Breaking';
+      this.actionLabel.textContent = `${verb} ${info.name}…`;
+      this.actionLabel.style.color = this._ringColor(info.action);
+
+      // Progress bar
+      this.actionBarFill.style.width = `${(bp * 100).toFixed(1)}%`;
+      this.actionBarFill.style.background = this._barGradient(info.action, bp);
+
+      this.actionEl.classList.remove('hidden');
+      this.actionEl.classList.add('visible');
+    } else {
+      this.breakRingFg.style.strokeDashoffset = this._ringCirc;
+      this.actionEl.classList.remove('visible');
+      this.actionEl.classList.add('hidden');
+      document.getElementById('crosshair').textContent = '+';
+    }
 
     // Coords / debug
     this.debugEl.innerHTML =

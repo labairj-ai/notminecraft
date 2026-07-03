@@ -11,7 +11,20 @@
   <canvas id="game-canvas"></canvas>
 
   <div id="overlay">
-    <div id="crosshair">+</div>
+    <div id="crosshair-wrap">
+      <svg id="break-ring" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="22" cy="22" r="17" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="3"/>
+        <circle id="break-ring-fg" cx="22" cy="22" r="17" fill="none"
+                stroke="white" stroke-width="3" stroke-linecap="round"
+                stroke-dasharray="106.8" stroke-dashoffset="106.8"
+                transform="rotate(-90 22 22)"/>
+      </svg>
+      <div id="crosshair">+</div>
+    </div>
+    <div id="action-indicator" class="hidden">
+      <div id="action-label"></div>
+      <div id="action-bar-wrap"><div id="action-bar-fill"></div></div>
+    </div>
     <div id="hotbar">
       <div class="slot active" id="slot-0"><div class="slot-icon"></div><span class="slot-label"></span></div>
       <div class="slot" id="slot-1"><div class="slot-icon"></div><span class="slot-label"></span></div>

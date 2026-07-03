@@ -37,6 +37,69 @@ const hlMesh = new THREE.LineSegments(hlEdges, new THREE.LineBasicMaterial({ col
 hlMesh.visible = false;
 scene.add(hlMesh);
 
+// ── Block crack overlay ───────────────────────────────────────────────────────
+const crackCanvas = document.createElement('canvas');
+crackCanvas.width = 64; crackCanvas.height = 64;
+const crackCtx = crackCanvas.getContext('2d');
+const crackTexture = new THREE.CanvasTexture(crackCanvas);
+crackTexture.flipY = false;
+
+const crackMat = new THREE.MeshBasicMaterial({
+  map: crackTexture,
+  transparent: true,
+  depthTest: true,
+  depthWrite: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -1,
+});
+const crackMesh = new THREE.Mesh(new THREE.BoxGeometry(1.002, 1.002, 1.002), crackMat);
+crackMesh.visible = false;
+scene.add(crackMesh);
+
+function seededVal(n) {
+  let s = (n * 1664525 + 1013904223) >>> 0;
+  s = (s * 1664525 + 1013904223) >>> 0;
+  return (s >>> 0) / 0xffffffff;
+}
+
+function updateCrackOverlay(progress, target) {
+  if (!target || progress <= 0) { crackMesh.visible = false; return; }
+  crackMesh.visible = true;
+  crackMesh.position.set(target.wx + 0.5, target.wy + 0.5, target.wz + 0.5);
+
+  const sz = 64;
+  crackCtx.clearRect(0, 0, sz, sz);
+
+  // Darkening overlay scales with progress
+  crackCtx.fillStyle = `rgba(0,0,0,${(progress * 0.55).toFixed(2)})`;
+  crackCtx.fillRect(0, 0, sz, sz);
+
+  // Draw cracks — more cracks at higher progress
+  const numCracks = Math.ceil(progress * 10);
+  for (let i = 0; i < numCracks; i++) {
+    const alpha = 0.55 + progress * 0.45;
+    crackCtx.strokeStyle = `rgba(0,0,0,${alpha.toFixed(2)})`;
+    crackCtx.lineWidth = 1 + progress;
+    crackCtx.beginPath();
+    let cx = seededVal(i * 3)     * sz;
+    let cy = seededVal(i * 3 + 1) * sz;
+    crackCtx.moveTo(cx, cy);
+    const segs = 2 + Math.floor(seededVal(i * 7) * 4);
+    for (let j = 0; j < segs; j++) {
+      cx += (seededVal(i * 11 + j * 2)     - 0.5) * sz * 0.4;
+      cy += (seededVal(i * 11 + j * 2 + 1) - 0.5) * sz * 0.4;
+      crackCtx.lineTo(cx, cy);
+    }
+    crackCtx.stroke();
+    // White highlight alongside crack
+    crackCtx.strokeStyle = `rgba(255,255,255,${(progress * 0.3).toFixed(2)})`;
+    crackCtx.lineWidth = 0.5;
+    crackCtx.stroke();
+  }
+
+  crackTexture.needsUpdate = true;
+}
+
 // ── World / Player / UI ───────────────────────────────────────────────────────
 const world  = new World(scene);
 const player = new Player(camera, world);
@@ -202,6 +265,9 @@ function loop(now) {
     player.update(dt);
     world.update(player.pos.x, player.pos.z);
     ui.update(dt);
+
+    // Crack overlay
+    updateCrackOverlay(player.getBreakProgress(), player.breakTarget);
 
     // Block highlight
     if (player.target) {
