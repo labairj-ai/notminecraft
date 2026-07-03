@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NotMinecraft</title>
+  <link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+
+  <div id="overlay">
+    <div id="crosshair">+</div>
+    <div id="hotbar">
+      <div class="slot active" id="slot-0"><div class="slot-icon"></div><span class="slot-label"></span></div>
+      <div class="slot" id="slot-1"><div class="slot-icon"></div><span class="slot-label"></span></div>
+      <div class="slot" id="slot-2"><div class="slot-icon"></div><span class="slot-label"></span></div>
+      <div class="slot" id="slot-3"><div class="slot-icon"></div><span class="slot-label"></span></div>
+      <div class="slot" id="slot-4"><div class="slot-icon"></div><span class="slot-label"></span></div>
+      <div class="slot" id="slot-5"><div class="slot-icon"></div><span class="slot-label"></span></div>
+      <div class="slot" id="slot-6"><div class="slot-icon"></div><span class="slot-label"></span></div>
+      <div class="slot" id="slot-7"><div class="slot-icon"></div><span class="slot-label"></span></div>
+      <div class="slot" id="slot-8"><div class="slot-icon"></div><span class="slot-label"></span></div>
+    </div>
+    <div id="hud-bottom">
+      <div id="health-bar"></div>
+      <div id="coords"></div>
+    </div>
+    <div id="block-name"></div>
+    <div id="debug-info"></div>
+  </div>
+
+  <div id="inventory-screen" class="hidden">
+    <div id="inventory-panel">
+      <h2>Inventory</h2>
+      <div id="inventory-grid"></div>
+      <div id="inventory-hotbar"></div>
+      <button id="close-inventory">Close (E)</button>
+    </div>
+  </div>
+
+  <div id="menu-screen">
+    <div id="menu-panel">
+      <h1 id="game-title">NotMinecraft</h1>
+      <p id="menu-subtitle">A Voxel Adventure</p>
+      <button id="play-btn">Play Game</button>
+      <div id="menu-controls">
+        <p>WASD — Move &nbsp;|&nbsp; Mouse — Look &nbsp;|&nbsp; Space — Jump</p>
+        <p>Left Click — Break &nbsp;|&nbsp; Right Click — Place</p>
+        <p>1-9 / Scroll — Hotbar &nbsp;|&nbsp; E — Inventory &nbsp;|&nbsp; Esc — Menu</p>
+        <p>F — Fly &nbsp;|&nbsp; Shift — Sprint/Descend &nbsp;|&nbsp; Ctrl — Sneak</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="pause-screen" class="hidden">
+    <div id="pause-panel">
+      <h2>Paused</h2>
+      <button id="resume-btn">Resume</button>
+      <button id="quit-btn">Quit to Menu</button>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
