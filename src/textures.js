@@ -365,6 +365,69 @@ export function createAtlas() {
     }
   }
 
+  // ── ROW 2 continued ────────────────────────────────────────────────────────
+
+  // [3,2] wool (soft white)
+  fill(ctx, 3, 2, '#e8e8f0');
+  noise(ctx, 3, 2, ['#d8d8e8','#f4f4ff','#ccccdd','#f0f0fc'], 0.35, 320);
+
+  // [4,2] torch (glowing amber)
+  fill(ctx, 4, 2, '#f0c040');
+  noise(ctx, 4, 2, ['#ffe060','#d8a020','#fff080','#e8b030'], 0.4, 420);
+  // bright core
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(4*TEX_SIZE+6, 2*TEX_SIZE+5, 4, 4);
+  ctx.fillStyle = '#ffe880';
+  ctx.fillRect(4*TEX_SIZE+5, 2*TEX_SIZE+4, 6, 6);
+
+  // [5,2] chest_top
+  fill(ctx, 5, 2, '#b08840');
+  noise(ctx, 5, 2, ['#c09850','#a07830'], 0.2, 520);
+  for (let y2 = 0; y2 < 16; y2 += 4) hLine(ctx, 5, 2, y2, '#8B6020');
+  ctx.strokeStyle = '#604010'; ctx.lineWidth = 1;
+  ctx.strokeRect(5*TEX_SIZE+0.5, 2*TEX_SIZE+0.5, TEX_SIZE-1, TEX_SIZE-1);
+  ctx.fillStyle = '#555'; ctx.fillRect(5*TEX_SIZE+6, 2*TEX_SIZE+6, 4, 4);
+  ctx.fillStyle = '#888'; ctx.fillRect(5*TEX_SIZE+7, 2*TEX_SIZE+7, 2, 2);
+
+  // [6,2] chest_side
+  fill(ctx, 6, 2, '#b08840');
+  noise(ctx, 6, 2, ['#c09850','#a07830'], 0.2, 620);
+  for (let y2 = 0; y2 < 16; y2 += 4) hLine(ctx, 6, 2, y2, '#8B6020');
+  ctx.strokeStyle = '#604010'; ctx.lineWidth = 1;
+  ctx.strokeRect(6*TEX_SIZE+0.5, 2*TEX_SIZE+0.5, TEX_SIZE-1, TEX_SIZE-1);
+  ctx.fillStyle = '#909090'; ctx.fillRect(6*TEX_SIZE+1, 2*TEX_SIZE+7, 14, 2);
+  ctx.fillStyle = '#686868'; ctx.fillRect(6*TEX_SIZE+6, 2*TEX_SIZE+4, 4, 7);
+  ctx.fillStyle = '#404040'; ctx.fillRect(6*TEX_SIZE+7, 2*TEX_SIZE+6, 2, 4);
+
+  // [8,2] concrete (smooth gray panels)
+  fill(ctx, 8, 2, '#8e8e8e');
+  noise(ctx, 8, 2, ['#9a9a9a','#828282','#959595'], 0.15, 820);
+  // Subtle panel lines
+  hLine(ctx, 8, 2, 0,  '#7a7a7a');
+  hLine(ctx, 8, 2, 8,  '#7a7a7a');
+  vLine(ctx, 8, 2, 0,  '#7a7a7a');
+  vLine(ctx, 8, 2, 8,  '#7a7a7a');
+
+  // [9,2] asphalt (dark road surface)
+  fill(ctx, 9, 2, '#2c2c2c');
+  noise(ctx, 9, 2, ['#383838','#222222','#303030'], 0.3, 920);
+  { const rr = rng(921);
+    for (let i = 0; i < 20; i++) {
+      ctx.fillStyle = 'rgba(80,80,80,0.5)';
+      ctx.fillRect(9*TEX_SIZE + Math.floor(rr()*15), 2*TEX_SIZE + Math.floor(rr()*15), 1, 1);
+    }
+  }
+
+  // [7,2] bed (red with pillow)
+  fill(ctx, 7, 2, '#cc3333');
+  noise(ctx, 7, 2, ['#dd4444','#bb2222'], 0.2, 720);
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.fillRect(7*TEX_SIZE+0, 2*TEX_SIZE+5, 16, 3);
+  ctx.fillRect(7*TEX_SIZE+0, 2*TEX_SIZE+11, 16, 2);
+  ctx.fillStyle = '#eeeeff';
+  ctx.fillRect(7*TEX_SIZE+2, 2*TEX_SIZE+1, 12, 4);
+  noise(ctx, 7, 2, ['rgba(200,200,230,0.5)'], 0.2, 721);
+
   return canvas;
 }
 

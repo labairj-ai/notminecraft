@@ -110,8 +110,9 @@ const ui     = new UI(player, world);
 const hand   = new FirstPersonHand(renderer);
 
 // ── State ────────────────────────────────────────────────────────────────────
-let gameState = 'menu'; // 'menu' | 'playing' | 'paused' | 'inventory'
+let gameState = 'menu'; // 'menu'|'playing'|'paused'|'inventory'|'dialog'|'shop'
 let lastTime  = 0;
+let activeNPC = null; // NPC currently in dialog/shop
 
 // ── Day / Night cycle ─────────────────────────────────────────────────────────
 let timeOfDay = 0.3; // 0=midnight, 0.25=sunrise, 0.5=noon, 0.75=sunset
@@ -222,28 +223,108 @@ document.getElementById('quit-btn').addEventListener('click', () => {
   ui.hide();
 });
 
-// ── Inventory toggle ──────────────────────────────────────────────────────────
+// ── Inventory closed (from any path: E key, button click, etc.) ──────────────
+document.addEventListener('inventoryClosed', () => {
+  if (gameState !== 'inventory') return;
+  gameState = 'playing';
+  lockPointer();
+});
+
+// ── NPC shop open ─────────────────────────────────────────────────────────────
+document.addEventListener('openShop', () => {
+  if (!activeNPC || gameState !== 'dialog') return;
+  gameState = 'shop';
+  ui.openShop(activeNPC, player);
+});
+
+// ── Shop closed (back to dialog) ──────────────────────────────────────────────
+document.addEventListener('shopClosed', () => {
+  if (gameState !== 'shop') return;
+  gameState = 'dialog';
+  ui.closeShop();
+  ui.openDialog(activeNPC);
+});
+
+// ── Crafting table event (right-click on crafting table block) ────────────────
+document.addEventListener('openCrafting', (e) => {
+  if (gameState !== 'playing') return;
+  document.exitPointerLock();
+  gameState = 'inventory';
+  ui.openInventory(e.detail); // detail = 3 for 3×3
+});
+
+// ── Inventory / dialog / shop key handling ────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.code === 'KeyE' && gameState === 'playing') {
     document.exitPointerLock();
     gameState = 'inventory';
-    ui.openInventory();
+    ui.openInventory(2);
     return;
   }
   if (e.code === 'KeyE' && gameState === 'inventory') {
-    ui.closeInventory();
-    gameState = 'playing';
-    lockPointer();
+    ui.closeInventory(); // dispatches 'inventoryClosed' → re-locks pointer
     return;
   }
-  if (e.code === 'Escape') {
-    if (gameState === 'inventory') {
-      ui.closeInventory();
-      gameState = 'playing';
-      lockPointer();
-    }
-    // Pointer unlock handles pause for 'playing' state
+  if (e.code === 'Escape' && gameState === 'inventory') {
+    ui.closeInventory();
+    return;
   }
+  // F = interact with nearby NPC
+  if (e.code === 'KeyF' && gameState === 'playing') {
+    const npc = world.npcs.getNearest(player.pos, 4);
+    if (npc) { openDialog(npc); }
+    return;
+  }
+  if (e.code === 'KeyF' && (gameState === 'dialog' || gameState === 'shop')) {
+    closeDialogOrShop();
+    return;
+  }
+  if (e.code === 'Escape' && gameState === 'dialog') {
+    closeDialogOrShop();
+    return;
+  }
+  if (e.code === 'Escape' && gameState === 'shop') {
+    ui.closeShop(); gameState = 'dialog';
+    return;
+  }
+  // Pointer unlock handles pause for 'playing' → 'paused' transition
+});
+
+function openDialog(npc) {
+  activeNPC   = npc;
+  gameState   = 'dialog'; // set BEFORE exitPointerLock to avoid pause-screen trigger
+  document.exitPointerLock();
+  ui.openDialog(npc);
+}
+
+function closeDialogOrShop() {
+  ui.closeDialog();
+  ui.closeShop();
+  activeNPC = null;
+  gameState = 'playing';
+  lockPointer();
+}
+
+// ── Dialog / shop buttons ─────────────────────────────────────────────────────
+document.getElementById('dialog-bye-btn').addEventListener('click', () => {
+  closeDialogOrShop();
+});
+
+document.getElementById('dialog-talk-btn').addEventListener('click', () => {
+  if (!activeNPC) return;
+  document.getElementById('dialog-text').textContent = activeNPC.nextLine();
+});
+
+document.getElementById('dialog-shop-btn').addEventListener('click', () => {
+  document.dispatchEvent(new CustomEvent('openShop'));
+});
+
+document.getElementById('shop-back-btn').addEventListener('click', () => {
+  document.dispatchEvent(new CustomEvent('shopClosed'));
+});
+
+document.getElementById('shop-close-btn').addEventListener('click', () => {
+  closeDialogOrShop();
 });
 
 // ── Start game ────────────────────────────────────────────────────────────────
@@ -266,6 +347,10 @@ function loop(now) {
     (player.keys['KeyW'] || player.keys['KeyS'] ||
      player.keys['KeyA'] || player.keys['KeyD']);
 
+  if (gameState === 'playing' || gameState === 'dialog' || gameState === 'shop') {
+    world.npcs.update(dt, player.pos);
+  }
+
   if (gameState === 'playing') {
     timeOfDay = (timeOfDay + dt / DAY_DURATION) % 1;
     updateSky(timeOfDay);
@@ -275,6 +360,12 @@ function loop(now) {
     player.update(dt);
     world.update(player.pos.x, player.pos.z);
     ui.update(dt);
+
+    // NPC nearby hint
+    const npcHint = document.getElementById('npc-hint');
+    const nearNPC = world.npcs.getNearest(player.pos, 4);
+    if (nearNPC) npcHint.classList.remove('hidden');
+    else          npcHint.classList.add('hidden');
 
     // Crack overlay
     updateCrackOverlay(player.getBreakProgress(), player.breakTarget);
@@ -289,7 +380,7 @@ function loop(now) {
     }
 
     // First-person hand — driven by the HELD ITEM, not the block's action
-    const heldId         = player.hotbar[player.selectedSlot];
+    const heldId         = player.hotbar[player.selectedSlot]?.id ?? null;
     const heldToolAction = getToolAction(heldId); // null → bare fist
     const info           = player.getBreakInfo();
 
@@ -305,7 +396,7 @@ function loop(now) {
   // ── Render ────────────────────────────────────────────────────────────────
   renderer.clear();
   renderer.render(scene, camera);
-  if (gameState === 'playing') hand.render();
+  if (gameState === 'playing' || gameState === 'dialog' || gameState === 'shop') hand.render();
 }
 
 requestAnimationFrame(loop);

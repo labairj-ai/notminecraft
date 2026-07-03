@@ -1,4 +1,5 @@
 import * as B from './blocks.js';
+import { getCityInfo, getCityColumn, CITY_BASE_Y } from './city.js';
 
 export const CHUNK_SIZE   = 16;
 export const CHUNK_HEIGHT = 64;
@@ -11,7 +12,7 @@ export function blockIndex(x, y, z) {
 function lerp(a, b, t) { return a + (b - a) * t; }
 function smoothstep(t) { return t * t * (3 - 2 * t); }
 
-export function generateChunkData(chunkX, chunkZ, noise2D, noise3D) {
+export function generateChunkData(chunkX, chunkZ, noise2D, noise3D, worldSeed = 0) {
   const data = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT);
   const treePositions = [];
 
@@ -20,6 +21,45 @@ export function generateChunkData(chunkX, chunkZ, noise2D, noise3D) {
       const wx = chunkX * CHUNK_SIZE + lx;
       const wz = chunkZ * CHUNK_SIZE + lz;
 
+      // ── City override ──────────────────────────────────────────────────────
+      const city = getCityInfo(wx, wz, worldSeed);
+      if (city) {
+        const col   = getCityColumn(city.localX, city.localZ, city.density, city.seed);
+        const baseY = CITY_BASE_Y;
+        for (let y = 0; y < CHUNK_HEIGHT; y++) {
+          const idx = blockIndex(lx, y, lz);
+          if (y === 0)          { data[idx] = B.BEDROCK;  continue; }
+          if (y < baseY - 3)    { data[idx] = B.STONE;    continue; }
+          if (y < baseY)        { data[idx] = B.DIRT;     continue; }
+
+          if (col.type === 'road') {
+            data[idx] = (y === baseY) ? B.ASPHALT : B.AIR;
+            continue;
+          }
+
+          // Building column
+          const bh = col.height;
+          if (y === baseY) {
+            data[idx] = B.CONCRETE; // ground floor slab
+          } else if (y <= baseY + bh) {
+            if (col.isPerimeter) {
+              const relY = y - baseY;
+              // Window every 3rd block except corners
+              const isWindow = !col.isCorner && (relY % 3 === 2) && relY < bh;
+              data[idx] = isWindow ? B.GLASS : B.CONCRETE;
+            } else {
+              data[idx] = B.AIR; // hollow interior
+            }
+          } else if (y === baseY + bh + 1) {
+            data[idx] = B.CONCRETE; // flat roof
+          } else {
+            data[idx] = B.AIR;
+          }
+        }
+        continue; // skip natural generation + tree placement for this column
+      }
+
+      // ── Natural terrain ────────────────────────────────────────────────────
       // Biome (temperature, humidity)
       const temp     = noise2D(wx * 0.0025, wz * 0.0025);
       const humidity = noise2D(wx * 0.0025 + 200, wz * 0.0025 + 200);
@@ -96,6 +136,14 @@ export function generateChunkData(chunkX, chunkZ, noise2D, noise3D) {
         const density   = isForest ? 0.65 : 0.72;
         if (treeNoise > density) {
           treePositions.push({ lx, lz, surfY, snowy: isSnowy });
+        }
+      }
+
+      // Wool patches (small grassy tufts, ~2% chance on non-desert grass above sea)
+      if (!isDesert && !isSnowy && surfY > SEA_LEVEL && surfY < CHUNK_HEIGHT - 2) {
+        const woolNoise = noise2D(wx * 0.7 + 900, wz * 0.7 + 900);
+        if (woolNoise > 0.92) {
+          data[blockIndex(lx, surfY + 1, lz)] = B.WOOL;
         }
       }
     }

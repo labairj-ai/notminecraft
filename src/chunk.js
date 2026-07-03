@@ -33,7 +33,7 @@ export class Chunk {
   }
 
   generate(noise2D, noise3D) {
-    this.data = generateChunkData(this.cx, this.cz, noise2D, noise3D);
+    this.data = generateChunkData(this.cx, this.cz, noise2D, noise3D, this.world.seed);
     this.dirty = true;
   }
 

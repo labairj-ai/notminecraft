@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import * as B from './blocks.js';
-import { getToolAction } from './blocks.js';
+import { getToolAction, BLOCK_DROPS } from './blocks.js';
 
 const GRAVITY    = 28;
 const JUMP_VEL   = 9;
@@ -25,33 +25,106 @@ export class Player {
     this.flying  = false;
     this.sprinting = false;
 
-    this.health  = 20;
+    this.health    = 20;
     this.maxHealth = 20;
 
-    this.hotbar  = [...B.DEFAULT_HOTBAR];
+    // Slots store { id:Number, count:Number } or null
+    this.hotbar    = Array(9).fill(null);
+    this.inventory = Array(18).fill(null); // 2 extra rows below hotbar
+
     this.selectedSlot = 0;
 
-    this.target  = null; // { wx, wy, wz, face }
-    this.breakProgress     = 0;
+    // Crafting grid (9 slots for 3×3; only first 4 used in 2×2 mode)
+    this.craftGrid     = Array(9).fill(null);
+    this.craftGridSize = 2; // 2 = pocket, 3 = at a crafting table
+
+    this.target             = null;
+    this.breakProgress      = 0;
     this.effectiveBreakTime = 0.6;
-    this.breakTarget       = null;
-    this.breakable         = false; // false → wrong tool, can't break
+    this.breakTarget        = null;
+    this.breakable          = false;
 
     this.keys    = {};
     this.spawned = false;
 
-    this._dir    = new THREE.Vector3();
-    this._euler  = new THREE.Euler(0, 0, 0, 'YXZ');
+    // Give starting coins
+    this.addItem(B.GOLD_COIN, 50);
+
+    this._dir   = new THREE.Vector3();
+    this._euler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+    this._scrollAccum = 0;
 
     this._bindInput();
   }
+
+  // ── Inventory helpers ──────────────────────────────────────────────────────
+
+  // Add `count` of item `id` to inventory (hotbar first, then main inventory).
+  // Stacks up to B.maxStack(id); extras are silently lost if no space.
+  addItem(id, count = 1) {
+    const max = B.maxStack(id);
+    let remaining = count;
+
+    const tryStack = (arr) => {
+      for (const slot of arr) {
+        if (!slot || slot.id !== id || slot.count >= max) continue;
+        const add = Math.min(remaining, max - slot.count);
+        slot.count += add;
+        remaining  -= add;
+        if (remaining === 0) return;
+      }
+    };
+    const tryEmpty = (arr) => {
+      for (let i = 0; i < arr.length && remaining > 0; i++) {
+        if (arr[i]) continue;
+        const add = Math.min(remaining, max);
+        arr[i]    = { id, count: add };
+        remaining -= add;
+      }
+    };
+
+    tryStack(this.hotbar);
+    tryStack(this.inventory);
+    tryEmpty(this.hotbar);
+    tryEmpty(this.inventory);
+  }
+
+  // Remove `count` of item `id` (hotbar first).  Returns how many were removed.
+  removeItem(id, count) {
+    let remaining = count;
+    const drain = (arr) => {
+      for (let i = 0; i < arr.length && remaining > 0; i++) {
+        const slot = arr[i];
+        if (!slot || slot.id !== id) continue;
+        const take  = Math.min(remaining, slot.count);
+        slot.count -= take;
+        remaining  -= take;
+        if (slot.count === 0) arr[i] = null;
+      }
+    };
+    drain(this.hotbar);
+    drain(this.inventory);
+    return count - remaining;
+  }
+
+  // Count how many of item `id` are in the full inventory.
+  countItem(id) {
+    let n = 0;
+    for (const slot of [...this.hotbar, ...this.inventory]) {
+      if (slot?.id === id) n += slot.count;
+    }
+    return n;
+  }
+
+  // ── Input ──────────────────────────────────────────────────────────────────
 
   _bindInput() {
     document.addEventListener('keydown', e => {
       if (!this.active) return;
       this.keys[e.code] = true;
 
-      if (e.code === 'KeyF') {
+      if (e.code === 'KeyG') {
         this.flying = !this.flying;
         this.vel.set(0, 0, 0);
       }
@@ -59,10 +132,8 @@ export class Player {
         this.vel.y = JUMP_VEL;
         this.onGround = false;
       }
-      if (e.code === 'Space' && this.flying) {
-        this.vel.y = FLY_SPEED;
-      }
-      // Number keys 1-9
+      if (e.code === 'Space' && this.flying) this.vel.y = FLY_SPEED;
+
       for (let i = 1; i <= 9; i++) {
         if (e.code === `Digit${i}`) {
           this.selectedSlot = i - 1;
@@ -84,13 +155,8 @@ export class Player {
       this.pitch  = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, this.pitch));
     });
 
-    // Accumulated scroll — Magic Mouse fires many tiny deltaY events plus
-    // momentum tail events.  Require 120 px of accumulated scroll before
-    // moving one slot, then reset so momentum can't immediately trigger again.
-    this._scrollAccum = 0;
     document.addEventListener('wheel', e => {
       if (!this.active) return;
-      // Normalise: deltaMode 0 = pixels, 1 = lines (~40 px), 2 = pages (~400 px)
       const px = e.deltaMode === 1 ? e.deltaY * 40
                : e.deltaMode === 2 ? e.deltaY * 400
                : e.deltaY;
@@ -99,14 +165,14 @@ export class Player {
         const step = Math.sign(this._scrollAccum);
         this.selectedSlot = (this.selectedSlot + step + 9) % 9;
         this._onSlotChange();
-        this._scrollAccum = 0; // reset so momentum tail needs a full new gesture
+        this._scrollAccum = 0;
       }
     });
 
     document.addEventListener('mousedown', e => {
       if (!this.active) return;
       if (e.button === 0) this._startBreak();
-      if (e.button === 2) this._placeBlock();
+      if (e.button === 2) this._interact();
     });
 
     document.addEventListener('mouseup', e => {
@@ -118,142 +184,62 @@ export class Player {
   }
 
   _onSlotChange() {
-    // Dispatch event for UI
     document.dispatchEvent(new CustomEvent('slotChange', { detail: this.selectedSlot }));
   }
 
-  _startBreak() {
-    if (!this.target) return;
-    const { wx, wy, wz } = this.target;
-    const id  = this.world.getBlock(wx, wy, wz);
-    const def = B.getDef(id);
-    if (def?.unbreakable) return;
-    this.breakTarget        = { wx, wy, wz, id };
-    this.breakProgress      = 0;
-    this.effectiveBreakTime = def?.breakTime ?? 0.6;
-    this.breakable          = true;
-  }
+  // ── Block interaction (right-click) ───────────────────────────────────────
 
-  _placeBlock() {
+  _interact() {
     if (!this.target) return;
     const { wx, wy, wz, face } = this.target;
+    const targetId = this.world.getBlock(wx, wy, wz);
+
+    // Right-click on crafting table → open 3×3 crafting screen
+    if (targetId === B.CRAFTING) {
+      this.craftGridSize = 3;
+      document.dispatchEvent(new CustomEvent('openCrafting', { detail: 3 }));
+      return;
+    }
+
+    // Otherwise place a block on the adjacent face
     if (!face) return;
     const nx = wx + face[0];
     const ny = wy + face[1];
     const nz = wz + face[2];
 
     // Don't place inside player
-    const px = Math.floor(this.pos.x);
-    const py = Math.floor(this.pos.y);
-    const pz = Math.floor(this.pos.z);
-    if (ny === py || ny === py + 1) {
-      if (nx === px && nz === pz) return;
-    }
+    const px = Math.floor(this.pos.x), py = Math.floor(this.pos.y), pz = Math.floor(this.pos.z);
+    if ((ny === py || ny === py + 1) && nx === px && nz === pz) return;
 
-    const id = this.hotbar[this.selectedSlot];
-    if (!id || id === B.AIR) return;
+    const slot = this.hotbar[this.selectedSlot];
+    const id   = slot?.id;
+    if (!id) return;
+    if (B.TOOL_DEFS[id] || B.ITEM_DEFS[id]) return; // can't place tools/materials
+
     this.world.setBlock(nx, ny, nz, id);
+    // Consume one from the stack
+    slot.count--;
+    if (slot.count === 0) this.hotbar[this.selectedSlot] = null;
   }
 
-  update(dt) {
-    this._updateLook();
-    this._updateMovement(dt);
-    this._updateBreaking(dt);
-    this._updateTarget();
-    this._applyCamera();
-  }
+  // ── Block breaking ─────────────────────────────────────────────────────────
 
-  _updateLook() {
-    // Nothing needed — yaw/pitch updated in mousemove
-  }
-
-  _updateMovement(dt) {
-    const speed = this.flying ? FLY_SPEED : (this.keys['ShiftLeft'] || this.keys['ShiftRight'] ? SPRINT_SPD : WALK_SPEED);
-
-    // Horizontal movement (yaw only)
-    const forward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
-    const right   = new THREE.Vector3( Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-
-    const moveDir = new THREE.Vector3();
-    if (this.keys['KeyW'] || this.keys['ArrowUp'])    moveDir.add(forward);
-    if (this.keys['KeyS'] || this.keys['ArrowDown'])  moveDir.sub(forward);
-    if (this.keys['KeyD'] || this.keys['ArrowRight']) moveDir.add(right);
-    if (this.keys['KeyA'] || this.keys['ArrowLeft'])  moveDir.sub(right);
-
-    if (moveDir.lengthSq() > 0) {
-      moveDir.normalize().multiplyScalar(speed);
-    }
-
-    this.vel.x = moveDir.x;
-    this.vel.z = moveDir.z;
-
-    if (this.flying) {
-      if (this.keys['Space'])     this.vel.y =  FLY_SPEED;
-      else if (this.keys['ControlLeft'] || this.keys['ControlRight']) this.vel.y = -FLY_SPEED;
-      else this.vel.y = 0;
-    } else {
-      // Gravity
-      this.vel.y -= GRAVITY * dt;
-      if (this.vel.y < -40) this.vel.y = -40;
-    }
-
-    // Resolve X
-    const nx = this.pos.x + this.vel.x * dt;
-    if (!this._collide(nx, this.pos.y, this.pos.z)) {
-      this.pos.x = nx;
-    } else {
-      this.vel.x = 0;
-    }
-
-    // Resolve Y
-    const ny = this.pos.y + this.vel.y * dt;
-    if (!this._collide(this.pos.x, ny, this.pos.z)) {
-      this.pos.y = ny;
-      if (!this.flying) this.onGround = false;
-    } else {
-      if (this.vel.y < 0) { this.onGround = true; }
-      this.vel.y = 0;
-    }
-
-    // Resolve Z
-    const nz = this.pos.z + this.vel.z * dt;
-    if (!this._collide(this.pos.x, this.pos.y, nz)) {
-      this.pos.z = nz;
-    } else {
-      this.vel.z = 0;
-    }
-
-    // Keep above bedrock
-    if (this.pos.y < 1) { this.pos.y = 1; this.vel.y = 0; this.onGround = true; }
-
-    // Fall damage / void
-    if (this.pos.y < -10) {
-      this.health = 0;
-      this.pos.set(0, 60, 0);
-      this.vel.set(0, 0, 0);
-    }
-  }
-
-  _collide(px, py, pz) {
-    const minX = px - HALF_W, maxX = px + HALF_W;
-    const minY = py,          maxY = py + PLAYER_H;
-    const minZ = pz - HALF_W, maxZ = pz + HALF_W;
-
-    for (let bx = Math.floor(minX); bx <= Math.floor(maxX - 0.001); bx++) {
-      for (let by = Math.floor(minY); by <= Math.floor(maxY - 0.001); by++) {
-        for (let bz = Math.floor(minZ); bz <= Math.floor(maxZ - 0.001); bz++) {
-          if (this.world.isSolid(bx, by, bz)) return true;
-        }
-      }
-    }
-    return false;
+  _startBreak() {
+    if (!this.target) return;
+    const { wx, wy, wz } = this.target;
+    const id  = this.world.getBlock(wx, wy, wz);
+    const def = B.getDef(id);
+    if (!def || def.unbreakable) return;
+    this.breakTarget        = { wx, wy, wz, id };
+    this.breakProgress      = 0;
+    this.effectiveBreakTime = def.breakTime;
+    this.breakable          = true;
   }
 
   _updateBreaking(dt) {
     if (!this.breakTarget) return;
     const { wx, wy, wz } = this.breakTarget;
 
-    // Cancel if look moved away
     if (!this.target || this.target.wx !== wx || this.target.wy !== wy || this.target.wz !== wz) {
       this.breakTarget = null; this.breakProgress = 0; return;
     }
@@ -262,13 +248,12 @@ export class Player {
     const def = B.getDef(id);
     if (!def || def.unbreakable) { this.breakTarget = null; this.breakProgress = 0; return; }
 
-    // Re-validate tool every frame so hotbar swaps immediately affect progress
-    const toolAction = getToolAction(this.hotbar[this.selectedSlot]);
+    const toolAction  = getToolAction(this.hotbar[this.selectedSlot]?.id);
     const correctTool = toolAction === def.action;
-    this.breakable = !def.requiresTool || correctTool;
+    this.breakable    = !def.requiresTool || correctTool;
 
     if (!this.breakable) {
-      this.breakProgress = 0; // no progress without the correct tool
+      this.breakProgress      = 0;
       this.effectiveBreakTime = Infinity;
       return;
     }
@@ -280,11 +265,81 @@ export class Player {
     if (this.breakProgress >= this.effectiveBreakTime) {
       if (id !== B.AIR && !B.getDef(id)?.unbreakable) {
         this.world.setBlock(wx, wy, wz, B.AIR);
-        const empty = this.hotbar.findIndex(b => b === B.AIR || b == null);
-        if (empty >= 0) this.hotbar[empty] = id;
+        const drop = BLOCK_DROPS[id];
+        if (drop) this.addItem(drop.id, drop.count);
+        else      this.addItem(id, 1);
       }
       this.breakTarget = null; this.breakProgress = 0;
     }
+  }
+
+  // ── Physics / movement ─────────────────────────────────────────────────────
+
+  update(dt) {
+    this._updateLook();
+    this._updateMovement(dt);
+    this._updateBreaking(dt);
+    this._updateTarget();
+    this._applyCamera();
+  }
+
+  _updateLook() {}
+
+  _updateMovement(dt) {
+    const speed = this.flying
+      ? FLY_SPEED
+      : (this.keys['ShiftLeft'] || this.keys['ShiftRight'] ? SPRINT_SPD : WALK_SPEED);
+
+    const forward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
+    const right   = new THREE.Vector3( Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+    const moveDir = new THREE.Vector3();
+
+    if (this.keys['KeyW'] || this.keys['ArrowUp'])    moveDir.add(forward);
+    if (this.keys['KeyS'] || this.keys['ArrowDown'])  moveDir.sub(forward);
+    if (this.keys['KeyD'] || this.keys['ArrowRight']) moveDir.add(right);
+    if (this.keys['KeyA'] || this.keys['ArrowLeft'])  moveDir.sub(right);
+
+    if (moveDir.lengthSq() > 0) moveDir.normalize().multiplyScalar(speed);
+    this.vel.x = moveDir.x;
+    this.vel.z = moveDir.z;
+
+    if (this.flying) {
+      if (this.keys['Space'])                                               this.vel.y =  FLY_SPEED;
+      else if (this.keys['ControlLeft'] || this.keys['ControlRight'])      this.vel.y = -FLY_SPEED;
+      else                                                                   this.vel.y = 0;
+    } else {
+      this.vel.y -= GRAVITY * dt;
+      if (this.vel.y < -40) this.vel.y = -40;
+    }
+
+    const nx = this.pos.x + this.vel.x * dt;
+    if (!this._collide(nx, this.pos.y, this.pos.z)) this.pos.x = nx; else this.vel.x = 0;
+
+    const ny = this.pos.y + this.vel.y * dt;
+    if (!this._collide(this.pos.x, ny, this.pos.z)) {
+      this.pos.y = ny;
+      if (!this.flying) this.onGround = false;
+    } else {
+      if (this.vel.y < 0) this.onGround = true;
+      this.vel.y = 0;
+    }
+
+    const nz = this.pos.z + this.vel.z * dt;
+    if (!this._collide(this.pos.x, this.pos.y, nz)) this.pos.z = nz; else this.vel.z = 0;
+
+    if (this.pos.y < 1) { this.pos.y = 1; this.vel.y = 0; this.onGround = true; }
+    if (this.pos.y < -10) { this.health = 0; this.pos.set(0, 60, 0); this.vel.set(0,0,0); }
+  }
+
+  _collide(px, py, pz) {
+    const minX = px - HALF_W, maxX = px + HALF_W;
+    const minY = py,          maxY = py + PLAYER_H;
+    const minZ = pz - HALF_W, maxZ = pz + HALF_W;
+    for (let bx = Math.floor(minX); bx <= Math.floor(maxX - 0.001); bx++)
+      for (let by = Math.floor(minY); by <= Math.floor(maxY - 0.001); by++)
+        for (let bz = Math.floor(minZ); bz <= Math.floor(maxZ - 0.001); bz++)
+          if (this.world.isSolid(bx, by, bz)) return true;
+    return false;
   }
 
   _updateTarget() {
@@ -296,12 +351,10 @@ export class Player {
   _applyCamera() {
     this._euler.set(this.pitch, this.yaw, 0, 'YXZ');
     this.camera.quaternion.setFromEuler(this._euler);
-    this.camera.position.set(
-      this.pos.x,
-      this.pos.y + EYE_HEIGHT,
-      this.pos.z
-    );
+    this.camera.position.set(this.pos.x, this.pos.y + EYE_HEIGHT, this.pos.z);
   }
+
+  // ── Break info (for UI + hand) ─────────────────────────────────────────────
 
   getBreakProgress() {
     if (!this.breakTarget || !this.breakable) return 0;
@@ -310,19 +363,21 @@ export class Player {
 
   getBreakInfo() {
     if (!this.breakTarget) return null;
-    const def        = B.getDef(this.breakTarget.id);
-    const toolAction = getToolAction(this.hotbar[this.selectedSlot]);
+    const def         = B.getDef(this.breakTarget.id);
+    const toolAction  = getToolAction(this.hotbar[this.selectedSlot]?.id);
     const correctTool = toolAction === def?.action;
-    const canBreak   = !def?.requiresTool || correctTool;
+    const canBreak    = !def?.requiresTool || correctTool;
     return {
       fraction:       this.getBreakProgress(),
-      action:         def?.action || 'break',      // block's action (label text)
-      heldToolAction: toolAction,                  // held item's action (hand anim)
+      action:         def?.action || 'break',
+      heldToolAction: toolAction,
       name:           def?.name || '',
       canBreak,
-      needsTool:      canBreak ? null : def?.action,  // 'mine'|'chop'|'dig' if blocked
+      needsTool:      canBreak ? null : def?.action,
     };
   }
+
+  // ── Spawn ──────────────────────────────────────────────────────────────────
 
   spawn(world) {
     if (this.spawned) return;

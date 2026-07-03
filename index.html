@@ -41,6 +41,7 @@
     </div>
     <div id="block-name"></div>
     <div id="debug-info"></div>
+    <div id="npc-hint" class="hidden">Press <kbd>F</kbd> to interact</div>
     <div id="controls-bar">
       <span><kbd>WASD</kbd> Move</span>
       <span><kbd>Mouse</kbd> Look</span>
@@ -49,7 +50,8 @@
       <span><kbd>RClick</kbd> Place</span>
       <span><kbd>Scroll</kbd> Hotbar</span>
       <span><kbd>E</kbd> Inventory</span>
-      <span><kbd>F</kbd> Fly</span>
+      <span><kbd>F</kbd> Interact</span>
+      <span><kbd>G</kbd> Fly</span>
       <span><kbd>Shift</kbd> Sprint</span>
       <span><kbd>Esc</kbd> Menu</span>
     </div>
@@ -57,10 +59,36 @@
 
   <div id="inventory-screen" class="hidden">
     <div id="inventory-panel">
-      <h2>Inventory</h2>
-      <div id="inventory-grid"></div>
-      <div id="inventory-hotbar"></div>
+
+      <!-- Crafting section -->
+      <div id="craft-section">
+        <div id="craft-header">
+          <span id="craft-title">Crafting</span>
+          <span id="craft-size-label"></span>
+        </div>
+        <div id="craft-area">
+          <div id="craft-grid"><!-- filled by JS --></div>
+          <div id="craft-arrow">▶</div>
+          <div id="craft-output" class="inv-slot output-slot">
+            <canvas width="32" height="32"></canvas>
+          </div>
+        </div>
+        <div id="craft-hint"></div>
+      </div>
+
+      <div class="inv-divider"></div>
+
+      <!-- Inventory slots -->
+      <div id="inv-main-grid"><!-- 18 slots by JS --></div>
+      <div id="inv-hotbar-row"><!-- 9 slots by JS --></div>
+
       <button id="close-inventory">Close (E)</button>
+    </div>
+
+    <!-- Floating cursor item (follows mouse while dragging in UI) -->
+    <div id="cursor-item" class="hidden">
+      <canvas id="cursor-canvas" width="32" height="32"></canvas>
+      <span id="cursor-count"></span>
     </div>
   </div>
 
@@ -73,7 +101,7 @@
         <p>WASD — Move &nbsp;|&nbsp; Mouse — Look &nbsp;|&nbsp; Space — Jump</p>
         <p>Left Click — Break &nbsp;|&nbsp; Right Click — Place</p>
         <p>1-9 / Scroll — Hotbar &nbsp;|&nbsp; E — Inventory &nbsp;|&nbsp; Esc — Menu</p>
-        <p>F — Fly &nbsp;|&nbsp; Shift — Sprint/Descend &nbsp;|&nbsp; Ctrl — Sneak</p>
+        <p>G — Fly &nbsp;|&nbsp; F — Interact with NPC &nbsp;|&nbsp; Shift — Sprint/Descend &nbsp;|&nbsp; Ctrl — Sneak</p>
       </div>
     </div>
   </div>
@@ -83,6 +111,41 @@
       <h2>Paused</h2>
       <button id="resume-btn">Resume</button>
       <button id="quit-btn">Quit to Menu</button>
+    </div>
+  </div>
+
+  <!-- Dialog screen -->
+  <div id="dialog-screen" class="hidden">
+    <div id="dialog-panel">
+      <div id="dialog-header">
+        <canvas id="dialog-avatar" width="48" height="48"></canvas>
+        <div id="dialog-identity">
+          <span id="dialog-npc-name">Name</span>
+          <span id="dialog-npc-badge">Citizen</span>
+        </div>
+      </div>
+      <div id="dialog-text"></div>
+      <div id="dialog-actions">
+        <button id="dialog-shop-btn" class="hidden">Browse Shop</button>
+        <button id="dialog-talk-btn">Talk More</button>
+        <button id="dialog-bye-btn">Goodbye [F]</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shop screen -->
+  <div id="shop-screen" class="hidden">
+    <div id="shop-panel">
+      <div id="shop-header">
+        <span id="shop-npc-name">Shop</span>
+        <span id="shop-coin-display">Coins: <span id="shop-coin-count">0</span></span>
+      </div>
+      <div id="shop-items-grid"></div>
+      <div id="shop-footer">
+        <span id="shop-status"></span>
+        <button id="shop-back-btn">← Back</button>
+        <button id="shop-close-btn">Close [F]</button>
+      </div>
     </div>
   </div>
 

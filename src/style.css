@@ -285,11 +285,11 @@ button:hover { background: #5d9c33; }
   line-height: 2;
 }
 
-/* Inventory */
+/* ── Inventory / Crafting screen ────────────────────────────────────────────── */
 #inventory-screen {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.7);
+  background: rgba(0,0,0,0.75);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -297,58 +297,410 @@ button:hover { background: #5d9c33; }
 }
 
 #inventory-panel {
-  background: #3b3b3b;
-  border: 2px solid #666;
+  background: #2e2e2e;
+  border: 2px solid #555;
   border-radius: 8px;
-  padding: 24px;
-  width: 460px;
+  padding: 20px 24px 16px;
+  width: 500px;
   color: #fff;
 }
 
-#inventory-panel h2 {
-  text-align: center;
-  margin-bottom: 16px;
-  font-size: 20px;
+/* ── Crafting section ──────────────────────────────────────────────────────── */
+#craft-section { margin-bottom: 14px; }
+
+#craft-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+#craft-title {
+  font-size: 14px;
+  font-weight: bold;
   color: #ccc;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 
-#inventory-grid {
+#craft-size-label {
+  font-size: 11px;
+  color: #888;
+}
+
+#craft-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Grid cells: 2×2 or 3×3 */
+.craft-grid-cells {
   display: grid;
-  grid-template-columns: repeat(9, 46px);
-  gap: 4px;
-  margin-bottom: 12px;
+  gap: 3px;
 }
 
+.craft-grid-cells.size-2 { grid-template-columns: repeat(2, 44px); }
+.craft-grid-cells.size-3 { grid-template-columns: repeat(3, 44px); }
+
+#craft-arrow {
+  font-size: 22px;
+  color: #888;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+
+#craft-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #8bc34a;
+  min-height: 14px;
+}
+
+/* ── Inventory slots ───────────────────────────────────────────────────────── */
+.inv-divider {
+  border: none;
+  border-top: 1px solid #444;
+  margin: 12px 0 10px;
+}
+
+#inv-main-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 48px);
+  gap: 3px;
+  margin-bottom: 3px;
+}
+
+#inv-hotbar-row {
+  display: grid;
+  grid-template-columns: repeat(9, 48px);
+  gap: 3px;
+  padding-top: 6px;
+  border-top: 1px solid #444;
+  margin-bottom: 14px;
+}
+
+/* ── Slot base style (craft cells + inv slots) ─────────────────────────────── */
 .inv-slot {
-  width: 46px;
-  height: 46px;
-  background: rgba(0,0,0,0.5);
-  border: 2px solid #555;
+  width: 44px;
+  height: 44px;
+  background: rgba(0,0,0,0.45);
+  border: 2px solid #444;
   border-radius: 3px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: border-color 0.1s;
+  position: relative;
 }
 
-.inv-slot:hover { border-color: #fff; }
+.inv-slot:hover  { border-color: #bbb; }
+
+.inv-slot.has-item { border-color: #555; }
 
 .inv-slot canvas {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   image-rendering: pixelated;
 }
 
-#inventory-hotbar {
-  display: flex;
-  gap: 4px;
-  justify-content: center;
-  margin-bottom: 16px;
-  padding-top: 10px;
-  border-top: 1px solid #555;
+/* stack count badge */
+.slot-badge {
+  position: absolute;
+  bottom: 2px;
+  right: 3px;
+  font-size: 9px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+  pointer-events: none;
 }
 
-#close-inventory {
-  width: 150px;
+/* output slot (craft result) */
+.output-slot {
+  width: 50px;
+  height: 50px;
+  border: 2px solid #333;
+  background: rgba(0,0,0,0.6);
 }
+
+.output-slot.has-result {
+  border-color: #8bc34a;
+  box-shadow: 0 0 6px rgba(139,195,74,0.4);
+}
+
+.output-slot canvas {
+  width: 32px;
+  height: 32px;
+}
+
+/* ── Floating cursor item (held while dragging) ───────────────────────────── */
+#cursor-item {
+  position: fixed;
+  pointer-events: none;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#cursor-item canvas {
+  width: 28px;
+  height: 28px;
+  image-rendering: pixelated;
+}
+
+#cursor-count {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  font-size: 9px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+}
+
+#close-inventory { width: 150px; display: block; margin: 0 auto; }
+
+/* ── Dialog screen ─────────────────────────────────────────────────────────── */
+#dialog-screen {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 80px;
+  pointer-events: none;
+  z-index: 120;
+}
+#dialog-screen.hidden { display: none; }
+
+#dialog-panel {
+  background: rgba(10,10,20,0.88);
+  border: 2px solid rgba(255,255,255,0.15);
+  border-radius: 10px;
+  padding: 16px 20px;
+  max-width: 560px;
+  width: 90%;
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
+}
+
+#dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+#dialog-avatar {
+  border-radius: 6px;
+  background: rgba(255,255,255,0.05);
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+#dialog-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+#dialog-npc-name {
+  font-size: 16px;
+  font-weight: bold;
+  color: #f0c040;
+}
+
+#dialog-npc-badge {
+  font-size: 11px;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+#dialog-text {
+  font-size: 14px;
+  color: #e8e8e8;
+  line-height: 1.5;
+  min-height: 40px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+  border-left: 3px solid rgba(240,192,64,0.5);
+}
+
+#dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+#dialog-actions button {
+  padding: 7px 14px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.08);
+  color: #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+#dialog-actions button:hover { background: rgba(255,255,255,0.18); }
+#dialog-actions button#dialog-shop-btn {
+  background: rgba(240,192,64,0.15);
+  border-color: rgba(240,192,64,0.4);
+  color: #f0c040;
+}
+#dialog-actions button#dialog-shop-btn:hover { background: rgba(240,192,64,0.28); }
+#dialog-actions button#dialog-bye-btn { color: #aaa; }
+
+/* ── Shop screen ───────────────────────────────────────────────────────────── */
+#shop-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.55);
+  z-index: 130;
+}
+#shop-screen.hidden { display: none; }
+
+#shop-panel {
+  background: rgba(10,10,20,0.95);
+  border: 2px solid rgba(255,255,255,0.15);
+  border-radius: 12px;
+  padding: 20px 24px;
+  width: min(600px, 95vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  backdrop-filter: blur(6px);
+}
+
+#shop-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding-bottom: 12px;
+}
+
+#shop-npc-name {
+  font-size: 18px;
+  font-weight: bold;
+  color: #f0c040;
+}
+
+#shop-coin-display {
+  font-size: 14px;
+  color: #aaa;
+}
+#shop-coin-count {
+  color: #f0c040;
+  font-weight: bold;
+}
+
+#shop-items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+  overflow-y: auto;
+  max-height: 50vh;
+  padding-right: 4px;
+}
+
+.shop-item-card {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  grid-template-rows: auto auto auto;
+  gap: 4px 8px;
+  align-items: center;
+}
+.shop-item-card.cannot-afford { opacity: 0.55; }
+
+.shop-item-card canvas {
+  image-rendering: pixelated;
+  grid-row: 1 / 3;
+}
+
+.shop-item-label {
+  font-size: 13px;
+  color: #e8e8e8;
+  align-self: end;
+}
+
+.shop-item-price {
+  font-size: 11px;
+  color: #f0c040;
+  align-self: start;
+}
+
+.shop-buy-btn {
+  grid-column: 1 / 3;
+  margin-top: 6px;
+  padding: 5px 0;
+  background: rgba(240,192,64,0.15);
+  border: 1px solid rgba(240,192,64,0.35);
+  border-radius: 5px;
+  color: #f0c040;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.15s;
+}
+.shop-buy-btn:hover:not(:disabled) { background: rgba(240,192,64,0.28); }
+.shop-buy-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#shop-footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  padding-top: 12px;
+}
+
+#shop-status {
+  flex: 1;
+  font-size: 12px;
+  color: #6ee7b7;
+}
+
+#shop-footer button {
+  padding: 7px 14px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.08);
+  color: #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+#shop-footer button:hover { background: rgba(255,255,255,0.18); }
+
+/* ── NPC indicator (show "F to interact" when near NPC) ────────────────────── */
+#npc-hint {
+  position: fixed;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.65);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  pointer-events: none;
+  z-index: 50;
+  transition: opacity 0.2s;
+}
+#npc-hint.hidden { display: none; }

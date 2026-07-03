@@ -28,11 +28,22 @@ export const BRICK         = 25;
 export const BOOKSHELF     = 26;
 export const MOSSY_COBBLE  = 27;
 export const SPONGE        = 28;
+export const WOOL          = 29;
+export const TORCH         = 30;
+export const CHEST         = 31;
+export const BED           = 32;
+export const CONCRETE      = 33;  // city building material
+export const ASPHALT       = 34;  // city road
 
-// ── Tool item IDs (not placeable) ─────────────────────────────────────────────
+// ── Tool / material item IDs (not placeable blocks) ──────────────────────────
 export const TOOL_PICKAXE  = 50;
 export const TOOL_AXE      = 51;
 export const TOOL_SHOVEL   = 52;
+export const STICK         = 53;  // crafting material
+export const COAL          = 54;  // drops from COAL_ORE; crafts torches
+export const TOOL_SWORD    = 55;
+export const TOOL_HOE      = 56;
+export const GOLD_COIN     = 57;  // currency
 
 // ── Block definitions ─────────────────────────────────────────────────────────
 // action      – which tool class applies ('dig'|'chop'|'mine'|'break')
@@ -71,14 +82,50 @@ export const BLOCK_DEFS = [
   { name:'Bookshelf',     solid:true,  action:'chop',  breakTime:1.5,  requiresTool:false, handMult:3.5,  textures:{ top:[9,0], side:[0,2], bottom:[9,0] },  color:'#c8a264' },
   { name:'Mossy Cobble',  solid:true,  action:'mine',  breakTime:2.0,  requiresTool:true,               textures:{ all:[1,2] },                             color:'#5a7a5a' },
   { name:'Sponge',        solid:true,  action:'dig',   breakTime:0.5,  requiresTool:false, handMult:1.5,  textures:{ all:[2,2] },                            color:'#d0cc60' },
+  { name:'Wool',          solid:true,  action:'break', breakTime:0.2,  requiresTool:false, handMult:1.0,  textures:{ all:[3,2] },                            color:'#eeeeff' },
+  { name:'Torch',         solid:true,  action:'break', breakTime:0.05, requiresTool:false, handMult:1.0,  emissive:true, textures:{ all:[4,2] },             color:'#f0c040' },
+  { name:'Chest',         solid:true,  action:'chop',  breakTime:1.5,  requiresTool:false, handMult:3.5,  textures:{ top:[5,2], side:[6,2], bottom:[5,2] }, color:'#a07030' },
+  { name:'Bed',           solid:true,  action:'break', breakTime:0.2,  requiresTool:false, handMult:1.0,  textures:{ all:[7,2] },                            color:'#cc4444' },
+  { name:'Concrete',      solid:true,  action:'mine',  breakTime:2.0,  requiresTool:true,               textures:{ all:[8,2] },                            color:'#909090' },
+  { name:'Asphalt',       solid:true,  action:'mine',  breakTime:1.5,  requiresTool:true,               textures:{ all:[9,2] },                            color:'#2c2c2c' },
 ];
 
 // ── Tool definitions ───────────────────────────────────────────────────────────
 export const TOOL_DEFS = {
-  [TOOL_PICKAXE]: { name:'Pickaxe', toolAction:'mine', isItem:true },
-  [TOOL_AXE]:     { name:'Axe',     toolAction:'chop', isItem:true },
-  [TOOL_SHOVEL]:  { name:'Shovel',  toolAction:'dig',  isItem:true },
+  [TOOL_PICKAXE]: { name:'Pickaxe', toolAction:'mine', isItem:true, maxStack:1 },
+  [TOOL_AXE]:     { name:'Axe',     toolAction:'chop', isItem:true, maxStack:1 },
+  [TOOL_SHOVEL]:  { name:'Shovel',  toolAction:'dig',  isItem:true, maxStack:1 },
+  [TOOL_SWORD]:   { name:'Sword',   toolAction:'swing',isItem:true, maxStack:1 },
+  [TOOL_HOE]:     { name:'Hoe',     toolAction:'till', isItem:true, maxStack:1 },
 };
+
+// ── Material item definitions ──────────────────────────────────────────────────
+export const ITEM_DEFS = {
+  [STICK]: { name:'Stick', isItem:true, maxStack:64 },
+  [COAL]:      { name:'Coal',      isItem:true, maxStack:64 },
+  [GOLD_COIN]: { name:'Gold Coin', isItem:true, maxStack:999 },
+};
+
+// ── Block drop overrides (id → drop instead of the block itself) ───────────────
+// Used when mining returns a different item than the block placed.
+export const BLOCK_DROPS = {
+  [COAL_ORE]: { id: COAL, count: 1 },
+};
+
+// Returns the def for any item ID (block, tool, or material).
+export function getAnyDef(id) {
+  return BLOCK_DEFS[id] || TOOL_DEFS[id] || ITEM_DEFS[id] || null;
+}
+
+export function getItemName(id) {
+  return TOOL_DEFS[id]?.name || ITEM_DEFS[id]?.name || BLOCK_DEFS[id]?.name || '';
+}
+
+export function maxStack(id) {
+  if (TOOL_DEFS[id]) return TOOL_DEFS[id].maxStack ?? 1;
+  if (ITEM_DEFS[id]) return ITEM_DEFS[id].maxStack ?? 64;
+  return 64; // default for blocks
+}
 
 // Which tool type (action) a held item provides. Returns null for bare hands / blocks.
 export function getToolAction(itemId) {
@@ -126,10 +173,12 @@ export const ALL_BLOCKS = [
   COBBLESTONE, GLASS, SNOW_BLOCK, ICE, CRAFTING, FURNACE,
   COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE, GLOWSTONE, TNT,
   OBSIDIAN, BRICK, BOOKSHELF, MOSSY_COBBLE, SPONGE, LAVA,
+  WOOL, TORCH, CHEST, BED, CONCRETE, ASPHALT,
 ];
 
-// All items shown in the inventory (tools first, then all blocks)
+// All items shown in the creative picker (tools + materials + blocks)
 export const ALL_ITEMS = [
-  TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL,
+  TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_SWORD, TOOL_HOE,
+  STICK, COAL, GOLD_COIN,
   ...ALL_BLOCKS,
 ];
