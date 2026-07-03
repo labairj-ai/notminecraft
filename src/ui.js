@@ -21,7 +21,6 @@ export class UI {
     // Break action UI
     this.actionEl     = document.getElementById('action-indicator');
     this.actionLabel  = document.getElementById('action-label');
-    this.actionBarFill= document.getElementById('action-bar-fill');
     this.breakRingFg  = document.getElementById('break-ring-fg');
     this._ringCirc    = 106.8; // 2π × 17
 
@@ -171,16 +170,6 @@ export class UI {
     return { dig:'#e8d99b', chop:'#c8a264', mine:'#5be8e8', break:'#fff' }[action] || '#fff';
   }
 
-  _barGradient(action, progress) {
-    const colors = {
-      dig:   ['#c8a060', '#e8d99b'],
-      chop:  ['#8B5E3C', '#c8a264'],
-      mine:  ['#30a0a0', '#5be8e8'],
-      break: ['#aaa',    '#fff'],
-    }[action] || ['#aaa','#fff'];
-    return `linear-gradient(to right, ${colors[0]}, ${colors[1]})`;
-  }
-
   show() { this.overlay.classList.add('active'); }
   hide() { this.overlay.classList.remove('active'); }
 
@@ -223,14 +212,10 @@ export class UI {
       this.breakRingFg.style.strokeDashoffset = (this._ringCirc * (1 - bp)).toFixed(2);
       this.breakRingFg.style.stroke = this._ringColor(info.action);
 
-      // Action label e.g. "Mining Diamond Ore"
+      // Action label e.g. "Mining Diamond Ore…"
       const verb = ACTION_LABELS[info.action] || 'Breaking';
       this.actionLabel.textContent = `${verb} ${info.name}…`;
       this.actionLabel.style.color = this._ringColor(info.action);
-
-      // Progress bar
-      this.actionBarFill.style.width = `${(bp * 100).toFixed(1)}%`;
-      this.actionBarFill.style.background = this._barGradient(info.action, bp);
 
       this.actionEl.classList.remove('hidden');
       this.actionEl.classList.add('visible');

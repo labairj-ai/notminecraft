@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { World } from './world.js';
 import { Player } from './player.js';
 import { UI } from './ui.js';
+import { FirstPersonHand } from './hand.js';
+import { BLOCK_DEFS } from './blocks.js';
 
 // ── Renderer ──────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('game-canvas');
@@ -10,6 +12,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = false;
 renderer.setClearColor(0x87ceeb);
+renderer.autoClear = false; // we control clearing manually for the hand pass
 
 // ── Scene / Camera ────────────────────────────────────────────────────────────
 const scene  = new THREE.Scene();
@@ -100,10 +103,11 @@ function updateCrackOverlay(progress, target) {
   crackTexture.needsUpdate = true;
 }
 
-// ── World / Player / UI ───────────────────────────────────────────────────────
+// ── World / Player / UI / Hand ────────────────────────────────────────────────
 const world  = new World(scene);
 const player = new Player(camera, world);
 const ui     = new UI(player, world);
+const hand   = new FirstPersonHand(renderer);
 
 // ── State ────────────────────────────────────────────────────────────────────
 let gameState = 'menu'; // 'menu' | 'playing' | 'paused' | 'inventory'
@@ -176,8 +180,10 @@ function updateSky(t) {
 
 // ── Resize ────────────────────────────────────────────────────────────────────
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+  const aspect = window.innerWidth / window.innerHeight;
+  camera.aspect = aspect;
   camera.updateProjectionMatrix();
+  hand.resize(aspect);
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
@@ -256,6 +262,10 @@ function loop(now) {
   const dt = Math.min((now - lastTime) / 1000, 0.05);
   lastTime = now;
 
+  const isMoving = player.active &&
+    (player.keys['KeyW'] || player.keys['KeyS'] ||
+     player.keys['KeyA'] || player.keys['KeyD']);
+
   if (gameState === 'playing') {
     timeOfDay = (timeOfDay + dt / DAY_DURATION) % 1;
     updateSky(timeOfDay);
@@ -277,9 +287,25 @@ function loop(now) {
     } else {
       hlMesh.visible = false;
     }
+
+    // First-person hand
+    const info = player.getBreakInfo();
+    if (info) {
+      hand.startBreaking(info.action);
+    } else {
+      hand.stopBreaking();
+      // Idle: show the tool type for the selected hotbar slot
+      const selId  = player.hotbar[player.selectedSlot];
+      const selDef = selId ? BLOCK_DEFS[selId] : null;
+      hand.switchTool(selDef?.action ?? null);
+    }
+    hand.update(dt, isMoving);
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
+  renderer.clear();
   renderer.render(scene, camera);
+  if (gameState === 'playing') hand.render();
 }
 
 requestAnimationFrame(loop);
