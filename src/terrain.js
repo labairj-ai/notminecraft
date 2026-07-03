@@ -1,5 +1,34 @@
 import * as B from './blocks.js';
-import { getCityInfo, getCityColumn, CITY_BASE_Y, DOOR_HEIGHT, BUILDING_MAX } from './city.js';
+import { getCityInfo, getCityColumn, CITY_BASE_Y, DOOR_HEIGHT } from './city.js';
+
+// Returns the block to place at a given interior cell above the floor slab.
+// inX/inZ: 1-12 (interior coords within building), floorNum: 0=ground, 1+
+// blockInFlr: 1 or 2 (position within the 3-block floor period, 0=slab itself)
+function interiorBlock(inX, inZ, floorNum, blockInFlr, wallAxisX) {
+  // Partition wall divides building into two rooms (with a 3-block passage at centre)
+  const isPartCol  = wallAxisX ? (inX === 7) : (inZ === 7);
+  const inPassage  = wallAxisX ? (inZ >= 5 && inZ <= 7) : (inX >= 5 && inX <= 7);
+  if (isPartCol && !inPassage) return B.PLANKS;
+
+  // Furniture only at the first block above the floor slab
+  if (blockInFlr !== 1) return B.AIR;
+
+  // Corner items pushed against interior walls
+  if (inX === 1  && inZ === 1)  return B.CHEST;
+  if (inX === 12 && inZ === 12) return B.CHEST;
+  if (inX === 1  && inZ === 12) return B.BOOKSHELF;
+  if (inX === 12 && inZ === 1)  return B.BOOKSHELF;
+
+  // Ground floor utility blocks
+  if (floorNum === 0 && inX === 4 && inZ === 4) return B.CRAFTING;
+  if (floorNum === 0 && inX === 9 && inZ === 4) return B.FURNACE;
+
+  // Upper floor beds (residential rooms)
+  if (floorNum > 0 && inX === 4 && inZ === 10) return B.BED;
+  if (floorNum > 0 && inX === 9 && inZ === 10) return B.BED;
+
+  return B.AIR;
+}
 
 export const CHUNK_SIZE   = 16;
 export const CHUNK_HEIGHT = 64;
@@ -38,25 +67,32 @@ export function generateChunkData(chunkX, chunkZ, noise2D, noise3D, worldSeed = 
           }
 
           // Building column
-          const bh = col.height;
+          const bh  = col.height;
+          const relY = y - baseY;
           if (y === baseY) {
-            data[idx] = B.CONCRETE; // ground floor slab
+            data[idx] = B.CONCRETE; // ground slab (all columns)
           } else if (y <= baseY + bh) {
             if (col.isPerimeter) {
-              const relY = y - baseY;
+              // ── Exterior walls ──────────────────────────────────────────
               if (col.isDoor && relY >= 1 && relY <= 2) {
-                // Bottom 2 blocks of opening: door block (closed by default)
                 data[idx] = B.DOOR_CLOSED;
               } else if (col.isDoor && relY >= 3 && relY <= DOOR_HEIGHT) {
-                // Top of 3-tall opening always stays open (clearance for player)
-                data[idx] = B.AIR;
+                data[idx] = B.AIR; // top clearance
+              } else if (col.glassExterior) {
+                data[idx] = B.GLASS; // all-glass tower
               } else {
-                // Window every 3rd block on non-corner walls
                 const isWindow = !col.isCorner && (relY % 3 === 2) && relY < bh;
-                data[idx] = isWindow ? B.GLASS : B.CONCRETE;
+                data[idx] = isWindow ? B.GLASS : col.wallBlock;
               }
             } else {
-              data[idx] = B.AIR; // hollow interior
+              // ── Interior ────────────────────────────────────────────────
+              const blockInFlr = relY % 3;
+              if (blockInFlr === 0) {
+                data[idx] = B.PLANKS; // floor slab at every level
+              } else {
+                const floorNum = Math.floor(relY / 3);
+                data[idx] = interiorBlock(col.inX, col.inZ, floorNum, blockInFlr, col.wallAxisX);
+              }
             }
           } else if (y === baseY + bh + 1) {
             data[idx] = B.CONCRETE; // flat roof

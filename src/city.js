@@ -1,4 +1,5 @@
 // ── City layout, NPC spawn, and car spawn ─────────────────────────────────────
+import * as B from './blocks.js';
 
 export const CITY_SPACING   = 600;
 export const CITY_RADIUS    = 220;
@@ -87,7 +88,20 @@ export function getCityColumn(localX, localZ, density, citySeed) {
     if (doorWall === 3 && inX === 0  && inZ >= d0 && inZ <= d1) isDoor = true;
   }
 
-  return { type: 'building', height, floors, isPerimeter, isCorner, isDoor, inX, inZ };
+  // ── Building style (exterior material + interior layout) ─────────────────────
+  const WALL_MATERIALS = [
+    B.CONCRETE, B.BRICK, B.STONE, B.PLANKS,
+    B.COBBLESTONE, B.GLASS, B.SAND, B.MOSSY_COBBLE,
+  ];
+  const styleIdx     = Math.floor(pr() * WALL_MATERIALS.length);
+  const wallBlock    = WALL_MATERIALS[styleIdx];
+  const glassExterior = (styleIdx === 5); // all-glass tower
+  const wallAxisX    = pr() > 0.5;        // interior partition direction (X or Z axis)
+
+  return {
+    type: 'building', height, floors, isPerimeter, isCorner, isDoor, inX, inZ,
+    wallBlock, glassExterior, wallAxisX,
+  };
 }
 
 // ── Public: NPC spawn points for a chunk ─────────────────────────────────────

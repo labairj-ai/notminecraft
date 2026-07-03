@@ -156,20 +156,25 @@ export function createAtlas() {
   fill(ctx, 12, 0, '#eef4ff');
   noise(ctx, 12, 0, ['#dde8f8','#f8fcff','#c8d8f0'], 0.2, 120);
 
-  // [13,0] glass
-  fill(ctx, 13, 0, 'rgba(150,210,240,0.3)');
-  ctx.strokeStyle = '#8cc0d8';
+  // [13,0] glass (transparent window pane — used by GLASS block id=11)
+  fill(ctx, 13, 0, 'rgba(185,228,248,0.17)'); // very transparent tint
+  ctx.strokeStyle = 'rgba(130,195,228,0.92)'; // visible frame
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(13*TEX_SIZE+0.75, 0*TEX_SIZE+0.75, TEX_SIZE-1.5, TEX_SIZE-1.5);
+  // cross-pane dividers
+  ctx.strokeStyle = 'rgba(150,210,240,0.7)';
   ctx.lineWidth = 1;
-  ctx.strokeRect(13*TEX_SIZE+0.5, 0*TEX_SIZE+0.5, TEX_SIZE-1, TEX_SIZE-1);
-  // cross-pane lines
   ctx.beginPath();
-  ctx.moveTo(13*TEX_SIZE+8, 0*TEX_SIZE);
-  ctx.lineTo(13*TEX_SIZE+8, 0*TEX_SIZE+TEX_SIZE);
+  ctx.moveTo(13*TEX_SIZE+8, 0*TEX_SIZE+1);
+  ctx.lineTo(13*TEX_SIZE+8, 0*TEX_SIZE+TEX_SIZE-1);
   ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(13*TEX_SIZE, 0*TEX_SIZE+8);
-  ctx.lineTo(13*TEX_SIZE+TEX_SIZE, 0*TEX_SIZE+8);
+  ctx.moveTo(13*TEX_SIZE+1, 0*TEX_SIZE+8);
+  ctx.lineTo(13*TEX_SIZE+TEX_SIZE-1, 0*TEX_SIZE+8);
   ctx.stroke();
+  // subtle highlight in top-left corner (light reflection)
+  ctx.fillStyle = 'rgba(255,255,255,0.28)';
+  ctx.fillRect(13*TEX_SIZE+2, 0*TEX_SIZE+2, 4, 2);
 
   // [14,0] ice
   fill(ctx, 14, 0, 'rgba(140,190,230,0.7)');
