@@ -84,11 +84,23 @@ export class Player {
       this.pitch  = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, this.pitch));
     });
 
+    // Accumulated scroll — Magic Mouse fires many tiny deltaY events plus
+    // momentum tail events.  Require 120 px of accumulated scroll before
+    // moving one slot, then reset so momentum can't immediately trigger again.
+    this._scrollAccum = 0;
     document.addEventListener('wheel', e => {
       if (!this.active) return;
-      const delta = Math.sign(e.deltaY);
-      this.selectedSlot = (this.selectedSlot + delta + 9) % 9;
-      this._onSlotChange();
+      // Normalise: deltaMode 0 = pixels, 1 = lines (~40 px), 2 = pages (~400 px)
+      const px = e.deltaMode === 1 ? e.deltaY * 40
+               : e.deltaMode === 2 ? e.deltaY * 400
+               : e.deltaY;
+      this._scrollAccum += px;
+      if (Math.abs(this._scrollAccum) >= 120) {
+        const step = Math.sign(this._scrollAccum);
+        this.selectedSlot = (this.selectedSlot + step + 9) % 9;
+        this._onSlotChange();
+        this._scrollAccum = 0; // reset so momentum tail needs a full new gesture
+      }
     });
 
     document.addEventListener('mousedown', e => {
