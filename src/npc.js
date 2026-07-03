@@ -174,14 +174,21 @@ function srng(seed) {
   return () => { s = ((s * 1664525 + 1013904223) >>> 0); return s / 0xffffffff; };
 }
 
+const HP_TABLE = { merchant: 3, citizen: 3, builder: 4, police: 6, businessperson: 3, tourist: 2 };
+
 // ── NPC class ─────────────────────────────────────────────────────────────────
 
 class NPC {
-  constructor(scene, { wx, wy, wz, type, seed, wander = false }) {
+  constructor(scene, world, { wx, wy, wz, type, seed, wander = false }) {
     this.homePos = new THREE.Vector3(wx, wy, wz);
     this.pos     = new THREE.Vector3(wx, wy, wz); // tracks rendered position
     this.type    = type;
     this.wander  = wander && type !== 'merchant'; // merchants never wander
+    this._world  = world;
+    this.hp      = HP_TABLE[type] ?? 3;
+    this._hitFlash   = 0;
+    this._dying      = false;
+    this._deathTimer = 0;
 
     const r = srng(seed);
     const pool   = OUTFITS[type] || OUTFITS.citizen;
@@ -292,14 +299,64 @@ class NPC {
     this._group = g;
   }
 
+  _isBlocked(nx, nz) {
+    if (!this._world) return false;
+    const by = Math.floor(this.homePos.y);
+    for (const [ox, oz] of [[0,0],[1,0],[0,1],[1,1]]) {
+      const cx = Math.floor(nx + (ox - 0.5) * 0.35);
+      const cz = Math.floor(nz + (oz - 0.5) * 0.35);
+      if (this._world.isSolid(cx, by, cz)) return true;
+      if (this._world.isSolid(cx, by + 1, cz)) return true;
+    }
+    return false;
+  }
+
+  takeDamage(amount) {
+    if (this._dying) return;
+    this.hp -= amount;
+    this._hitFlash = 0.25;
+    if (this.hp <= 0) this._dying = true;
+  }
+
+  _setEmissive(hex) {
+    this._group.traverse(o => {
+      if (o.isMesh && o.material.emissive) o.material.emissive.setHex(hex);
+    });
+  }
+
   update(dt, playerPos) {
+    // ── Death animation ────────────────────────────────────────────────────
+    if (this._dying) {
+      this._deathTimer += dt;
+      const t = Math.min(this._deathTimer / 0.7, 1);
+      this._group.rotation.z = t * Math.PI / 2;
+      this._group.position.y = this.homePos.y - t * 0.6;
+      if (t >= 1) {
+        // Fade out
+        const fade = Math.max(0, 1 - (this._deathTimer - 0.7) / 0.4);
+        this._group.traverse(o => {
+          if (o.isMesh) { o.material.transparent = true; o.material.opacity = fade; }
+        });
+        if (this._deathTimer > 1.1) {
+          this.dispose();
+          return true; // signal removal
+        }
+      }
+      return false;
+    }
+
     this._phase += dt * 1.1;
+
+    // Hit flash
+    if (this._hitFlash > 0) {
+      this._hitFlash -= dt;
+      this._setEmissive(this._hitFlash > 0 ? 0x661111 : 0x000000);
+    }
 
     // ── Wandering ─────────────────────────────────────────────────────────
     if (this.wander) {
       this._wanderTimer -= dt;
       if (this._wanderTimer <= 0) {
-        // Pick a new wander target close to home (stays near home pos)
         const r = srng(Math.floor(Date.now() / 4000) ^ (this.homePos.x * 31 + this.homePos.z));
         const angle = r() * Math.PI * 2;
         const dist  = 3 + r() * 9;
@@ -320,8 +377,17 @@ class NPC {
         const spd = 1.8 * dt;
         const mag = Math.sqrt(d2);
         const step = Math.min(spd, mag);
-        this._group.position.x += (dx / mag) * step;
-        this._group.position.z += (dz / mag) * step;
+        const nx = this._group.position.x + (dx / mag) * step;
+        const nz = this._group.position.z + (dz / mag) * step;
+
+        if (!this._isBlocked(nx, nz)) {
+          this._group.position.x = nx;
+          this._group.position.z = nz;
+        } else {
+          // Collision — pick a new wander direction
+          this._wanderTarget.copy(this._group.position);
+          this._wanderTimer = 0;
+        }
         this._group.position.y = this.homePos.y;
 
         // Face movement direction
@@ -367,6 +433,8 @@ class NPC {
     } else {
       this._head.rotation.y *= 0.9;
     }
+
+    return false; // alive
   }
 
   nextLine() {
@@ -386,8 +454,9 @@ class NPC {
 // ── NPCManager ────────────────────────────────────────────────────────────────
 
 export class NPCManager {
-  constructor(scene) {
+  constructor(scene, world) {
     this._scene  = scene;
+    this._world  = world;
     this._npcs   = new Map(); // key → NPC
     this._chunks = new Map(); // chunkKey → Set<key>
   }
@@ -398,7 +467,7 @@ export class NPCManager {
     for (const s of spawns) {
       const k = `${s.wx.toFixed(1)},${s.wz.toFixed(1)},${s.type}`;
       if (!this._npcs.has(k)) {
-        this._npcs.set(k, new NPC(this._scene, s));
+        this._npcs.set(k, new NPC(this._scene, this._world, s));
       }
       keys.add(k);
     }
@@ -428,6 +497,12 @@ export class NPCManager {
   }
 
   update(dt, playerPos) {
-    for (const npc of this._npcs.values()) npc.update(dt, playerPos);
+    for (const [k, npc] of this._npcs) {
+      const dead = npc.update(dt, playerPos);
+      if (dead) {
+        this._npcs.delete(k);
+        for (const keys of this._chunks.values()) keys.delete(k);
+      }
+    }
   }
 }

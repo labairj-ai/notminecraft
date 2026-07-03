@@ -1,5 +1,5 @@
 import * as B from './blocks.js';
-import { getCityInfo, getCityColumn, CITY_BASE_Y, DOOR_HEIGHT } from './city.js';
+import { getCityInfo, getCityColumn, CITY_BASE_Y, DOOR_HEIGHT, BUILDING_MAX } from './city.js';
 
 export const CHUNK_SIZE   = 16;
 export const CHUNK_HEIGHT = 64;
@@ -44,8 +44,11 @@ export function generateChunkData(chunkX, chunkZ, noise2D, noise3D, worldSeed = 
           } else if (y <= baseY + bh) {
             if (col.isPerimeter) {
               const relY = y - baseY;
-              // Door opening: clear from relY=1 up to DOOR_HEIGHT (inclusive)
-              if (col.isDoor && relY >= 1 && relY <= DOOR_HEIGHT) {
+              if (col.isDoor && relY >= 1 && relY <= 2) {
+                // Bottom 2 blocks of opening: door block (closed by default)
+                data[idx] = B.DOOR_CLOSED;
+              } else if (col.isDoor && relY >= 3 && relY <= DOOR_HEIGHT) {
+                // Top of 3-tall opening always stays open (clearance for player)
                 data[idx] = B.AIR;
               } else {
                 // Window every 3rd block on non-corner walls

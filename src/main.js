@@ -110,9 +110,14 @@ const ui     = new UI(player, world);
 const hand   = new FirstPersonHand(renderer);
 
 // ── State ────────────────────────────────────────────────────────────────────
-let gameState = 'menu'; // 'menu'|'playing'|'paused'|'inventory'|'dialog'|'shop'
+let gameState = 'menu'; // 'menu'|'playing'|'paused'|'inventory'|'dialog'|'shop'|'driving'
 let lastTime  = 0;
-let activeNPC = null; // NPC currently in dialog/shop
+let activeNPC = null;  // NPC currently in dialog/shop
+let activeCar = null;  // car currently being driven
+
+// Driving camera offset (behind and above)
+const _driveCamOffset = new THREE.Vector3();
+const _driveLookAt    = new THREE.Vector3();
 
 // ── Day / Night cycle ─────────────────────────────────────────────────────────
 let timeOfDay = 0.3; // 0=midnight, 0.25=sunrise, 0.5=noon, 0.75=sunset
@@ -256,13 +261,27 @@ document.addEventListener('openCrafting', (e) => {
 // ── Inventory / dialog / shop key handling ────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.code === 'KeyE' && gameState === 'playing') {
+    // Enter car first, then inventory
+    const nearbyCar = world.cars.getNearest(player.pos, 3.5);
+    if (nearbyCar && !nearbyCar.occupied) {
+      enterCar(nearbyCar);
+      return;
+    }
     document.exitPointerLock();
     gameState = 'inventory';
     ui.openInventory(2);
     return;
   }
+  if (e.code === 'KeyE' && gameState === 'driving') {
+    exitCar();
+    return;
+  }
   if (e.code === 'KeyE' && gameState === 'inventory') {
     ui.closeInventory(); // dispatches 'inventoryClosed' → re-locks pointer
+    return;
+  }
+  if (e.code === 'Escape' && gameState === 'driving') {
+    exitCar();
     return;
   }
   if (e.code === 'Escape' && gameState === 'inventory') {
@@ -304,6 +323,43 @@ function closeDialogOrShop() {
   gameState = 'playing';
   lockPointer();
 }
+
+function enterCar(car) {
+  activeCar = car;
+  car.occupied = true;
+  gameState = 'driving';
+  player.active = false; // disable player FPS controls; camera follows car
+  document.exitPointerLock();
+  const hint = document.getElementById('npc-hint');
+  hint.textContent = 'WASD = Drive  |  E = Exit Car';
+  hint.classList.remove('hidden');
+}
+
+function exitCar() {
+  if (!activeCar) return;
+  player.pos.set(
+    activeCar.pos.x + Math.sin(activeCar.heading + Math.PI / 2) * 2.5,
+    activeCar.pos.y + 1,
+    activeCar.pos.z + Math.cos(activeCar.heading + Math.PI / 2) * 2.5,
+  );
+  activeCar.occupied = false;
+  activeCar = null;
+  gameState = 'playing';
+  player.velY = 0;
+  player.flying = true;
+  document.getElementById('npc-hint').classList.add('hidden');
+  lockPointer(); // E-key is a user gesture, so this works
+}
+
+// Left-click attack on NPCs when not aiming at a block
+document.addEventListener('mousedown', e => {
+  if (e.button !== 0 || !player.active || gameState !== 'playing') return;
+  // Only attack when there's no block target (swinging in air / at NPC)
+  if (!player.target) {
+    const npc = world.npcs.getNearest(player.pos, 3.0);
+    if (npc) npc.takeDamage(1);
+  }
+});
 
 // ── Dialog / shop buttons ─────────────────────────────────────────────────────
 document.getElementById('dialog-bye-btn').addEventListener('click', () => {
@@ -347,8 +403,26 @@ function loop(now) {
     (player.keys['KeyW'] || player.keys['KeyS'] ||
      player.keys['KeyA'] || player.keys['KeyD']);
 
-  if (gameState === 'playing' || gameState === 'dialog' || gameState === 'shop') {
+  if (gameState !== 'menu' && gameState !== 'paused') {
     world.npcs.update(dt, player.pos);
+  }
+
+  if ((gameState === 'playing' || gameState === 'dialog' || gameState === 'shop') && !activeCar) {
+    world.cars.update(dt, {}, null);
+  }
+
+  if (gameState === 'driving' && activeCar) {
+    world.cars.update(dt, player.keys, activeCar);
+    // Sync player position to car so chunks load around it
+    player.pos.copy(activeCar.pos);
+    world.update(activeCar.pos.x, activeCar.pos.z);
+
+    // Drive camera: behind and above the car
+    const fwd = new THREE.Vector3(Math.sin(activeCar.heading), 0, Math.cos(activeCar.heading));
+    _driveCamOffset.copy(activeCar.pos).addScaledVector(fwd, -5.5).setY(activeCar.pos.y + 2.8);
+    camera.position.lerp(_driveCamOffset, Math.min(1, dt * 10));
+    _driveLookAt.copy(activeCar.pos).addScaledVector(fwd, 3).setY(activeCar.pos.y + 0.8);
+    camera.lookAt(_driveLookAt);
   }
 
   if (gameState === 'playing') {
@@ -397,6 +471,8 @@ function loop(now) {
   renderer.clear();
   renderer.render(scene, camera);
   if (gameState === 'playing' || gameState === 'dialog' || gameState === 'shop') hand.render();
+  // In driving mode: clear block highlight and crack overlay
+  if (gameState === 'driving') { hlMesh.visible = false; crackMesh.visible = false; }
 }
 
 requestAnimationFrame(loop);

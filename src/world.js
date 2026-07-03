@@ -3,8 +3,9 @@ import { createNoise2D, createNoise3D } from 'simplex-noise';
 import { Chunk } from './chunk.js';
 import { createAtlas } from './textures.js';
 import { CHUNK_SIZE, CHUNK_HEIGHT, SEA_LEVEL } from './terrain.js';
-import { getCityInfo, getChunkNPCSpawns } from './city.js';
+import { getCityInfo, getChunkNPCSpawns, getChunkCarSpawns } from './city.js';
 import { NPCManager } from './npc.js';
+import { CarManager } from './car.js';
 import * as B from './blocks.js';
 
 const RENDER_DIST = 7;
@@ -40,7 +41,8 @@ export class World {
     });
 
     this._pendingBuilds = [];
-    this.npcs = new NPCManager(scene);
+    this.npcs = new NPCManager(scene, this);
+    this.cars = new CarManager(scene);
   }
 
   cityInfo(wx, wz) { return getCityInfo(wx, wz, this.seed); }
@@ -108,10 +110,13 @@ export class World {
           c.generate(this.noise2D, this.noise3D);
           this.chunks.set(k, c);
           this._scheduleBuild(c);
-          // Spawn NPCs for this chunk
+          // Spawn NPCs and cars for this chunk
           const spawns = getChunkNPCSpawns(cx, cz, this.seed,
             (wx, wz) => this.cityInfo(wx, wz));
           this.npcs.spawnForChunk(k, spawns);
+          const carSpawns = getChunkCarSpawns(cx, cz, this.seed,
+            (wx, wz) => this.cityInfo(wx, wz));
+          this.cars.spawnForChunk(k, carSpawns);
         }
       }
     }
@@ -122,6 +127,7 @@ export class World {
       const dz = chunk.cz - pcz;
       if (dx*dx + dz*dz > (RENDER_DIST + 2) * (RENDER_DIST + 2)) {
         this.npcs.despawnChunk(k);
+        this.cars.despawnChunk(k);
         chunk.dispose();
         this.chunks.delete(k);
       }
@@ -157,7 +163,8 @@ export class World {
 
     while (dist < maxDist) {
       const b = this.getBlock(x, y, z);
-      if (b !== B.AIR && B.isSolid(b)) {
+      // Also detect DOOR_OPEN so players can right-click to close it
+      if (b !== B.AIR && (B.isSolid(b) || b === B.DOOR_OPEN)) {
         return { wx: x, wy: y, wz: z, face };
       }
 

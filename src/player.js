@@ -201,6 +201,24 @@ export class Player {
       return;
     }
 
+    // Right-click DOOR_CLOSED → open (both this block and the one above)
+    if (targetId === B.DOOR_CLOSED) {
+      this.world.setBlock(wx, wy, wz, B.DOOR_OPEN);
+      if (this.world.getBlock(wx, wy + 1, wz) === B.DOOR_CLOSED)
+        this.world.setBlock(wx, wy + 1, wz, B.DOOR_OPEN);
+      return;
+    }
+
+    // Right-click DOOR_OPEN → close it (and companion block)
+    if (targetId === B.DOOR_OPEN) {
+      this.world.setBlock(wx, wy, wz, B.DOOR_CLOSED);
+      const above = this.world.getBlock(wx, wy + 1, wz);
+      const below = this.world.getBlock(wx, wy - 1, wz);
+      if (above === B.DOOR_OPEN) this.world.setBlock(wx, wy + 1, wz, B.DOOR_CLOSED);
+      else if (below === B.DOOR_OPEN) this.world.setBlock(wx, wy - 1, wz, B.DOOR_CLOSED);
+      return;
+    }
+
     // Otherwise place a block on the adjacent face
     if (!face) return;
     const nx = wx + face[0];

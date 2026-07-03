@@ -44,10 +44,25 @@ function _drawBlockIcon(ctx, id) {
   const atlas = getAtlas();
   const [sc, sr] = def.textures.side || def.textures.all || [0,0];
   const [tc, tr] = def.textures.top  || def.textures.all || [0,0];
+
+  // Transparent blocks (glass, ice, water, leaves, door-open) render semi-opaque
+  const isTransp = def.transparent && id !== 0;
+  if (isTransp) {
+    // Draw a subtle checkered background so transparency reads visually
+    ctx.fillStyle = '#6b7280'; ctx.fillRect(0, 0, 32, 32);
+    ctx.fillStyle = '#9ca3af';
+    for (let cy = 0; cy < 32; cy += 6)
+      for (let cx = 0; cx < 32; cx += 6)
+        if ((Math.floor(cx/6) + Math.floor(cy/6)) % 2 === 0) ctx.fillRect(cx, cy, 6, 6);
+    ctx.globalAlpha = 0.62;
+  }
+
   ctx.drawImage(atlas, tc*TEX_SIZE, tr*TEX_SIZE, TEX_SIZE, TEX_SIZE, 1,  0, 30, 14);
   ctx.drawImage(atlas, sc*TEX_SIZE, sr*TEX_SIZE, TEX_SIZE, TEX_SIZE, 1, 14, 30, 18);
   ctx.fillStyle = 'rgba(0,0,0,0.22)';
   ctx.fillRect(1, 14, 30, 18);
+
+  if (isTransp) ctx.globalAlpha = 1.0;
 }
 
 function _drawToolIcon(ctx, id) {

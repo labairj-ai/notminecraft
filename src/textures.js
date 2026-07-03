@@ -418,6 +418,28 @@ export function createAtlas() {
     }
   }
 
+  // [10,2] door_closed (wooden door panel with frame and knob)
+  fill(ctx, 10, 2, '#8B4513');
+  noise(ctx, 10, 2, ['#7a3a0a','#9a4a18','#6e3208'], 0.2, 1020);
+  // frame border
+  ctx.strokeStyle = '#4a2000'; ctx.lineWidth = 1;
+  ctx.strokeRect(10*TEX_SIZE+0.5, 2*TEX_SIZE+0.5, TEX_SIZE-1, TEX_SIZE-1);
+  // upper panel
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(10*TEX_SIZE+3, 2*TEX_SIZE+2, TEX_SIZE-6, 5);
+  // lower panel
+  ctx.fillRect(10*TEX_SIZE+3, 2*TEX_SIZE+9, TEX_SIZE-6, 5);
+  // centre rail
+  hLine(ctx, 10, 2, 8, '#4a2000');
+  // door knob (gold)
+  ctx.fillStyle = '#fbbf24'; ctx.fillRect(10*TEX_SIZE+11, 2*TEX_SIZE+8, 2, 2);
+  ctx.fillStyle = '#ca8a04'; ctx.fillRect(10*TEX_SIZE+12, 2*TEX_SIZE+9, 1, 1);
+
+  // [11,2] door_open (ghost — thin frame outline only, center transparent)
+  // leave center pixels as canvas-default transparent (alphaTest culls them)
+  ctx.strokeStyle = 'rgba(100,55,10,0.5)'; ctx.lineWidth = 2;
+  ctx.strokeRect(11*TEX_SIZE+1.5, 2*TEX_SIZE+1.5, TEX_SIZE-3, TEX_SIZE-3);
+
   // [7,2] bed (red with pillow)
   fill(ctx, 7, 2, '#cc3333');
   noise(ctx, 7, 2, ['#dd4444','#bb2222'], 0.2, 720);
