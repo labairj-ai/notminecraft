@@ -514,9 +514,11 @@ export class UI {
   openDialog(npc) {
     const s = document.getElementById('dialog-screen');
     document.getElementById('dialog-npc-name').textContent  = npc.name;
-    document.getElementById('dialog-npc-badge').textContent =
-      npc.type === 'merchant' ? 'Merchant' :
-      npc.type === 'builder'  ? 'Builder'  : 'Citizen';
+    const BADGES = {
+      merchant: 'Merchant', builder: 'Builder', police: 'Officer',
+      businessperson: 'Business', tourist: 'Tourist', citizen: 'Citizen',
+    };
+    document.getElementById('dialog-npc-badge').textContent = BADGES[npc.type] || 'Citizen';
     document.getElementById('dialog-text').textContent = npc.nextLine();
 
     const shopBtn = document.getElementById('dialog-shop-btn');
@@ -530,9 +532,11 @@ export class UI {
     const av  = document.getElementById('dialog-avatar');
     const ctx = av.getContext('2d');
     ctx.clearRect(0, 0, 48, 48);
-    const skinColor =
-      npc.type === 'merchant' ? '#f59e0b' :
-      npc.type === 'builder'  ? '#6b7280' : '#3b82f6';
+    const AVATAR_COLORS = {
+      merchant: '#f59e0b', builder: '#d97706', police: '#1d4ed8',
+      businessperson: '#4b5563', tourist: '#f472b6', citizen: '#3b82f6',
+    };
+    const skinColor = AVATAR_COLORS[npc.type] || '#3b82f6';
     ctx.fillStyle = skinColor;
     ctx.fillRect(10, 4, 28, 28);  // head
     ctx.fillStyle = npc.type === 'merchant' ? '#92400e' : '#1e3a5f';

@@ -1,15 +1,15 @@
 // ── City layout & NPC spawn ───────────────────────────────────────────────────
-//
-// Cities sit on a jittered grid.  Every CITY_SPACING blocks there is ONE city.
-// Inside each city, a 12-block-period grid lays out 2-block roads and 10-block
-// building plots.  Buildings are hollow concrete+glass boxes; height scales with
-// distance from the city center.
 
-export const CITY_SPACING   = 600;  // blocks between city centres
-export const CITY_RADIUS    = 220;  // blocks: city extent from centre
-export const CITY_BASE_Y    = 24;   // terrain level inside cities
+export const CITY_SPACING   = 600;
+export const CITY_RADIUS    = 220;
+export const CITY_BASE_Y    = 24;
 export const STREET_PERIOD  = 12;   // 2 road + 10 building per period
 export const STREET_WIDTH   = 2;
+
+// Door opening: 2 blocks wide, centred in wall, 2 blocks tall (relY 1–2)
+export const DOOR_WIDTH    = 2;
+export const DOOR_START    = 4;    // inX/inZ position of door left edge (in 10-wide wall)
+export const DOOR_HEIGHT   = 3;    // air from relY=1 to relY=3 (3 blocks tall)
 
 function srng(seed) {
   let s = ((seed * 1664525 + 1013904223) >>> 0);
@@ -19,8 +19,6 @@ function srng(seed) {
 function mod(x, n) { return ((x % n) + n) % n; }
 
 // ── Public: city info for a world column ──────────────────────────────────────
-//
-// Returns { centerX, centerZ, localX, localZ, dist, density, seed } or null.
 export function getCityInfo(wx, wz, worldSeed) {
   const sp = CITY_SPACING;
   const gx = Math.floor(wx / sp);
@@ -31,7 +29,6 @@ export function getCityInfo(wx, wz, worldSeed) {
       const cx2 = gx + dgx;
       const cz2 = gz + dgz;
       const r = srng(worldSeed * 31337 + cx2 * 92837 + cz2 * 18671);
-      // Jitter city centre within the middle 60% of its grid cell
       const cx = (cx2 + 0.2 + r() * 0.6) * sp;
       const cz = (cz2 + 0.2 + r() * 0.6) * sp;
       const lx = wx - cx;
@@ -53,16 +50,15 @@ export function getCityInfo(wx, wz, worldSeed) {
 
 // ── Public: per-column layout ─────────────────────────────────────────────────
 //
-// Returns { type:'road' } or { type:'building', height, isPerimeter, isCorner }
+// Returns:
+//   { type:'road', sidewalk:bool }
+//   { type:'building', height, floors, isPerimeter, isCorner, isDoor, inX, inZ }
 export function getCityColumn(localX, localZ, density, citySeed) {
-  // localX/localZ are floats (city centre is jitter-offset from integers).
-  // Floor to integer block coords before modulo so strict-equality perimeter
-  // checks (inX === 0, inX === 9, etc.) work correctly.
+  // Floor to integer block coords — localX/localZ are floats due to jitter.
   const px = mod(Math.floor(localX), STREET_PERIOD);
   const pz = mod(Math.floor(localZ), STREET_PERIOD);
 
   if (px < STREET_WIDTH || pz < STREET_WIDTH) {
-    // Sidewalk strip along roads
     const isSidewalk = (px === STREET_WIDTH || px === STREET_WIDTH + 1 ||
                         pz === STREET_WIDTH || pz === STREET_WIDTH + 1);
     return { type: 'road', sidewalk: isSidewalk };
@@ -78,35 +74,39 @@ export function getCityColumn(localX, localZ, density, citySeed) {
   const pr = srng(citySeed * 99991 + plotX * 73856 + plotZ * 19349);
   const minFloors = Math.max(1, Math.round(density * 8));
   const floors    = minFloors + Math.floor(pr() * 6);
-  const height    = floors * 3; // 3 blocks per storey
+  const height    = floors * 3;
 
-  return { type: 'building', height, floors, isPerimeter, isCorner, inX, inZ };
+  // Each building gets one door: a randomly chosen wall, centred.
+  // doorWall: 0=inZ=0(front), 1=inX=9(right), 2=inZ=9(back), 3=inX=0(left)
+  const doorWall = Math.floor(pr() * 4);
+  let isDoor = false;
+  if (isPerimeter && !isCorner) {
+    const d0 = DOOR_START;
+    const d1 = DOOR_START + DOOR_WIDTH - 1;
+    if (doorWall === 0 && inZ === 0 && inX >= d0 && inX <= d1) isDoor = true;
+    if (doorWall === 1 && inX === 9 && inZ >= d0 && inZ <= d1) isDoor = true;
+    if (doorWall === 2 && inZ === 9 && inX >= d0 && inX <= d1) isDoor = true;
+    if (doorWall === 3 && inX === 0 && inZ >= d0 && inZ <= d1) isDoor = true;
+  }
+
+  return { type: 'building', height, floors, isPerimeter, isCorner, isDoor, inX, inZ };
 }
 
 // ── Public: NPC spawn points for a chunk ─────────────────────────────────────
-//
-// cityInfoFn(wx, wz) must return the same getCityInfo result.
 export function getChunkNPCSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
   const SIZE = 16;
   const spawns = [];
   const seen   = new Set();
 
-  // Sample 5 positions per chunk; only spawn at building entrance positions
-  for (const [lx, lz] of [[3,3],[3,13],[13,3],[13,13],[8,8]]) {
+  // ── Pass 1: door-adjacent NPCs (merchants, builders) ─────────────────────
+  for (const [lx, lz] of [[2,2],[2,10],[10,2],[10,10],[6,6],[6,2],[2,6],[10,6],[6,10]]) {
     const wx = chunkX * SIZE + lx;
     const wz = chunkZ * SIZE + lz;
     const city = cityInfoFn(wx, wz);
     if (!city) continue;
 
     const col = getCityColumn(city.localX, city.localZ, city.density, city.seed);
-    if (col.type !== 'building') continue;
-
-    // Spawn on the perimeter, just outside the door opening (px=2 or pz=2)
-    const px = mod(Math.floor(city.localX), STREET_PERIOD);
-    const pz = mod(Math.floor(city.localZ), STREET_PERIOD);
-    const isEntrance = (px === STREET_WIDTH && pz >= 4 && pz <= 7) ||
-                       (pz === STREET_WIDTH && px >= 4 && px <= 7);
-    if (!isEntrance) continue;
+    if (col.type !== 'building' || !col.isDoor) continue;
 
     const key = `${wx},${wz}`;
     if (seen.has(key)) continue;
@@ -114,9 +114,41 @@ export function getChunkNPCSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
 
     const r = srng(worldSeed + wx * 4999 + wz * 7691);
     const t = r();
-    const type = t < 0.45 ? 'merchant' : t < 0.75 ? 'citizen' : 'builder';
-    spawns.push({ wx: wx + 0.5, wy: CITY_BASE_Y + 1, wz: wz + 0.5, type,
-                  seed: Math.floor(worldSeed + wx * 4999 + wz * 7691) });
+    const type = t < 0.5 ? 'merchant' : t < 0.75 ? 'builder' : 'businessperson';
+    spawns.push({
+      wx: wx + 0.5, wy: CITY_BASE_Y + 1, wz: wz + 0.5,
+      type, wander: false,
+      seed: Math.floor(worldSeed + wx * 4999 + wz * 7691),
+    });
   }
+
+  // ── Pass 2: street pedestrians (citizens, police, tourists) ──────────────
+  const pr = srng(worldSeed * 7 + chunkX * 9431 + chunkZ * 6271);
+  const count = Math.floor(pr() * 3); // 0–2 pedestrians per chunk
+  for (let i = 0; i < count; i++) {
+    const lx = Math.floor(pr() * SIZE);
+    const lz = Math.floor(pr() * SIZE);
+    const wx = chunkX * SIZE + lx;
+    const wz = chunkZ * SIZE + lz;
+    const city = cityInfoFn(wx, wz);
+    if (!city) continue;
+
+    const col = getCityColumn(city.localX, city.localZ, city.density, city.seed);
+    if (col.type !== 'road') continue;
+
+    const key = `ped:${wx},${wz}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const r2 = srng(worldSeed + wx * 3571 + wz * 8219 + i);
+    const t = r2();
+    const type = t < 0.35 ? 'citizen' : t < 0.6 ? 'police' : t < 0.85 ? 'businessperson' : 'tourist';
+    spawns.push({
+      wx: wx + 0.5, wy: CITY_BASE_Y + 1, wz: wz + 0.5,
+      type, wander: true,
+      seed: Math.floor(worldSeed + wx * 3571 + wz * 8219 + i),
+    });
+  }
+
   return spawns;
 }

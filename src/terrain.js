@@ -1,5 +1,5 @@
 import * as B from './blocks.js';
-import { getCityInfo, getCityColumn, CITY_BASE_Y } from './city.js';
+import { getCityInfo, getCityColumn, CITY_BASE_Y, DOOR_HEIGHT } from './city.js';
 
 export const CHUNK_SIZE   = 16;
 export const CHUNK_HEIGHT = 64;
@@ -44,9 +44,14 @@ export function generateChunkData(chunkX, chunkZ, noise2D, noise3D, worldSeed = 
           } else if (y <= baseY + bh) {
             if (col.isPerimeter) {
               const relY = y - baseY;
-              // Window every 3rd block except corners
-              const isWindow = !col.isCorner && (relY % 3 === 2) && relY < bh;
-              data[idx] = isWindow ? B.GLASS : B.CONCRETE;
+              // Door opening: clear from relY=1 up to DOOR_HEIGHT (inclusive)
+              if (col.isDoor && relY >= 1 && relY <= DOOR_HEIGHT) {
+                data[idx] = B.AIR;
+              } else {
+                // Window every 3rd block on non-corner walls
+                const isWindow = !col.isCorner && (relY % 3 === 2) && relY < bh;
+                data[idx] = isWindow ? B.GLASS : B.CONCRETE;
+              }
             } else {
               data[idx] = B.AIR; // hollow interior
             }
