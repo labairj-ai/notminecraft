@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import * as B from './blocks.js';
+import { getToolAction } from './blocks.js';
 
 const GRAVITY    = 28;
 const JUMP_VEL   = 9;
@@ -31,9 +32,10 @@ export class Player {
     this.selectedSlot = 0;
 
     this.target  = null; // { wx, wy, wz, face }
-    this.breakProgress = 0;
-    this.breakTime     = 0.6;
-    this.breakTarget   = null;
+    this.breakProgress     = 0;
+    this.effectiveBreakTime = 0.6;
+    this.breakTarget       = null;
+    this.breakable         = false; // false → wrong tool, can't break
 
     this.keys    = {};
     this.spawned = false;
@@ -111,12 +113,13 @@ export class Player {
   _startBreak() {
     if (!this.target) return;
     const { wx, wy, wz } = this.target;
-    const id = this.world.getBlock(wx, wy, wz);
+    const id  = this.world.getBlock(wx, wy, wz);
     const def = B.getDef(id);
     if (def?.unbreakable) return;
-    this.breakTarget   = { wx, wy, wz, id };
-    this.breakProgress = 0;
-    this.breakTime     = def?.breakTime ?? 0.6;
+    this.breakTarget        = { wx, wy, wz, id };
+    this.breakProgress      = 0;
+    this.effectiveBreakTime = def?.breakTime ?? 0.6;
+    this.breakable          = true;
   }
 
   _placeBlock() {
@@ -236,17 +239,36 @@ export class Player {
 
   _updateBreaking(dt) {
     if (!this.breakTarget) return;
-    const { wx, wy, wz, id: breakId } = this.breakTarget;
+    const { wx, wy, wz } = this.breakTarget;
+
     // Cancel if look moved away
     if (!this.target || this.target.wx !== wx || this.target.wy !== wy || this.target.wz !== wz) {
       this.breakTarget = null; this.breakProgress = 0; return;
     }
+
+    const id  = this.world.getBlock(wx, wy, wz);
+    const def = B.getDef(id);
+    if (!def || def.unbreakable) { this.breakTarget = null; this.breakProgress = 0; return; }
+
+    // Re-validate tool every frame so hotbar swaps immediately affect progress
+    const toolAction = getToolAction(this.hotbar[this.selectedSlot]);
+    const correctTool = toolAction === def.action;
+    this.breakable = !def.requiresTool || correctTool;
+
+    if (!this.breakable) {
+      this.breakProgress = 0; // no progress without the correct tool
+      this.effectiveBreakTime = Infinity;
+      return;
+    }
+
+    const mult = correctTool ? 1.0 : (def.handMult ?? 3.0);
+    this.effectiveBreakTime = def.breakTime * mult;
     this.breakProgress += dt;
-    if (this.breakProgress >= this.breakTime) {
-      const id = this.world.getBlock(wx, wy, wz);
+
+    if (this.breakProgress >= this.effectiveBreakTime) {
       if (id !== B.AIR && !B.getDef(id)?.unbreakable) {
         this.world.setBlock(wx, wy, wz, B.AIR);
-        const empty = this.hotbar.findIndex(b => b === B.AIR || !b);
+        const empty = this.hotbar.findIndex(b => b === B.AIR || b == null);
         if (empty >= 0) this.hotbar[empty] = id;
       }
       this.breakTarget = null; this.breakProgress = 0;
@@ -270,17 +292,23 @@ export class Player {
   }
 
   getBreakProgress() {
-    if (!this.breakTarget) return 0;
-    return Math.min(1, this.breakProgress / this.breakTime);
+    if (!this.breakTarget || !this.breakable) return 0;
+    return Math.min(1, this.breakProgress / (this.effectiveBreakTime || 1));
   }
 
   getBreakInfo() {
     if (!this.breakTarget) return null;
-    const def = B.getDef(this.breakTarget.id);
+    const def        = B.getDef(this.breakTarget.id);
+    const toolAction = getToolAction(this.hotbar[this.selectedSlot]);
+    const correctTool = toolAction === def?.action;
+    const canBreak   = !def?.requiresTool || correctTool;
     return {
-      fraction: this.getBreakProgress(),
-      action: def?.action || 'break',
-      name: def?.name || '',
+      fraction:       this.getBreakProgress(),
+      action:         def?.action || 'break',      // block's action (label text)
+      heldToolAction: toolAction,                  // held item's action (hand anim)
+      name:           def?.name || '',
+      canBreak,
+      needsTool:      canBreak ? null : def?.action,  // 'mine'|'chop'|'dig' if blocked
     };
   }
 

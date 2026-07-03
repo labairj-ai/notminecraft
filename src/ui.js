@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { BLOCK_DEFS, ALL_BLOCKS, AIR, ACTION_LABELS } from './blocks.js';
+import { BLOCK_DEFS, ALL_ITEMS, AIR, ACTION_LABELS, TOOL_NEEDED_LABEL,
+         TOOL_DEFS, TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL } from './blocks.js';
 import { createAtlas, ATLAS_COLS, ATLAS_ROWS, TEX_SIZE } from './textures.js';
 
 export class UI {
@@ -87,10 +88,49 @@ export class UI {
     const slot = this.slots[i];
     const icon = slot.querySelector('canvas');
     if (!icon) return;
-    const blockId = this.player.hotbar[i];
-    this._drawBlockIcon(icon, blockId);
+    const itemId = this.player.hotbar[i];
+    if (TOOL_DEFS[itemId]) {
+      this._drawToolIcon(icon, itemId);
+    } else {
+      this._drawBlockIcon(icon, itemId);
+    }
     const label = slot.querySelector('.slot-label');
     if (label) label.textContent = i + 1;
+  }
+
+  // Pixel-art tool icons drawn on a 32x32 canvas
+  _drawToolIcon(canvas, toolId) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, 32, 32);
+    const wood = '#9a6b3a';
+    const iron = '#c0c8d0';
+    if (toolId === TOOL_PICKAXE) {
+      // Handle
+      ctx.fillStyle = wood; ctx.fillRect(13, 14, 5, 16);
+      // Head bar
+      ctx.fillStyle = iron; ctx.fillRect(4,  8, 24, 6);
+      // Left tip
+      ctx.fillRect(4, 14, 6, 6);
+      // Right tip
+      ctx.fillRect(22, 14, 6, 6);
+    } else if (toolId === TOOL_AXE) {
+      // Handle
+      ctx.fillStyle = wood; ctx.fillRect(13, 14, 5, 18);
+      // Blade
+      ctx.fillStyle = iron; ctx.fillRect(13, 4, 14, 14);
+      // Back nub
+      ctx.fillRect(10, 4, 3, 9);
+      // Edge highlight
+      ctx.fillStyle = '#d8e0e8'; ctx.fillRect(25, 4, 2, 14);
+    } else if (toolId === TOOL_SHOVEL) {
+      // Handle
+      ctx.fillStyle = wood; ctx.fillRect(13, 8, 5, 24);
+      // Blade body
+      ctx.fillStyle = iron; ctx.fillRect(8, 2, 16, 10);
+      // Blade edge (rounded bottom)
+      ctx.fillRect(9,  12, 14, 2);
+      ctx.fillRect(10, 14, 12, 2);
+    }
   }
 
   _updateSlotHighlight(selected) {
@@ -98,8 +138,8 @@ export class UI {
   }
 
   _showBlockName(slot) {
-    const id = this.player.hotbar[slot];
-    const name = BLOCK_DEFS[id]?.name || '';
+    const id   = this.player.hotbar[slot];
+    const name = TOOL_DEFS[id]?.name || BLOCK_DEFS[id]?.name || '';
     this.blockNameEl.textContent = name;
     this.blockNameEl.classList.toggle('show', !!name);
     this._blockNameTimer = 2;
@@ -107,15 +147,19 @@ export class UI {
 
   _buildInventory() {
     this.invGrid.innerHTML = '';
-    ALL_BLOCKS.forEach(id => {
+    ALL_ITEMS.forEach(id => {
       const div = document.createElement('div');
       div.className = 'inv-slot';
-      div.title = BLOCK_DEFS[id]?.name || '';
+      div.title = TOOL_DEFS[id]?.name || BLOCK_DEFS[id]?.name || '';
       const c = document.createElement('canvas');
       c.width = 32; c.height = 32;
       c.style.cssText = 'width:28px;height:28px;image-rendering:pixelated';
       div.appendChild(c);
-      this._drawBlockIcon(c, id);
+      if (TOOL_DEFS[id]) {
+        this._drawToolIcon(c, id);
+      } else {
+        this._drawBlockIcon(c, id);
+      }
       div.addEventListener('click', () => this._selectFromInv(id));
       this.invGrid.appendChild(div);
     });
@@ -170,6 +214,13 @@ export class UI {
     return { dig:'#e8d99b', chop:'#c8a264', mine:'#5be8e8', break:'#fff' }[action] || '#fff';
   }
 
+  _hideRing() {
+    this.breakRingFg.style.strokeDashoffset = this._ringCirc;
+    this.breakRingFg.style.stroke = 'white';
+    this.actionEl.classList.remove('visible');
+    this.actionEl.classList.add('hidden');
+  }
+
   show() { this.overlay.classList.add('active'); }
   hide() { this.overlay.classList.remove('active'); }
 
@@ -202,34 +253,38 @@ export class UI {
 
     // Break ring + action indicator
     const info = p.getBreakInfo();
-    const bp   = info ? info.fraction : 0;
 
-    if (info && bp > 0) {
-      // Crosshair pulse
-      document.getElementById('crosshair').textContent = '+';
-
-      // Progress ring (stroke-dashoffset sweeps from full → 0 as progress 0→1)
-      this.breakRingFg.style.strokeDashoffset = (this._ringCirc * (1 - bp)).toFixed(2);
-      this.breakRingFg.style.stroke = this._ringColor(info.action);
-
-      // Action label e.g. "Mining Diamond Ore…"
-      const verb = ACTION_LABELS[info.action] || 'Breaking';
-      this.actionLabel.textContent = `${verb} ${info.name}…`;
-      this.actionLabel.style.color = this._ringColor(info.action);
-
-      this.actionEl.classList.remove('hidden');
-      this.actionEl.classList.add('visible');
+    if (info) {
+      if (!info.canBreak) {
+        // Wrong tool — red ring + "Needs Pickaxe" label, no sweep
+        this.breakRingFg.style.strokeDashoffset = this._ringCirc;
+        this.breakRingFg.style.stroke = '#ff4444';
+        this.actionLabel.textContent = TOOL_NEEDED_LABEL[info.needsTool] || 'Wrong tool';
+        this.actionLabel.style.color = '#ff6666';
+        this.actionEl.classList.remove('hidden');
+        this.actionEl.classList.add('visible');
+      } else if (info.fraction > 0) {
+        // Correct tool — normal coloured sweep
+        this.breakRingFg.style.strokeDashoffset = (this._ringCirc * (1 - info.fraction)).toFixed(2);
+        this.breakRingFg.style.stroke = this._ringColor(info.action);
+        const verb = ACTION_LABELS[info.action] || 'Breaking';
+        this.actionLabel.textContent = `${verb} ${info.name}…`;
+        this.actionLabel.style.color = this._ringColor(info.action);
+        this.actionEl.classList.remove('hidden');
+        this.actionEl.classList.add('visible');
+      } else {
+        this._hideRing();
+      }
     } else {
-      this.breakRingFg.style.strokeDashoffset = this._ringCirc;
-      this.actionEl.classList.remove('visible');
-      this.actionEl.classList.add('hidden');
-      document.getElementById('crosshair').textContent = '+';
+      this._hideRing();
     }
 
     // Coords / debug
+    const heldId   = p.hotbar[p.selectedSlot];
+    const heldName = TOOL_DEFS[heldId]?.name || BLOCK_DEFS[heldId]?.name || 'Empty';
     this.debugEl.innerHTML =
       `XYZ: ${p.pos.x.toFixed(1)}, ${p.pos.y.toFixed(1)}, ${p.pos.z.toFixed(1)}<br>` +
       `${p.flying ? 'FLY' : (p.onGround ? 'GROUND' : 'AIR')} | ` +
-      `Slot: ${p.selectedSlot + 1} — ${BLOCK_DEFS[p.hotbar[p.selectedSlot]]?.name || 'Empty'}`;
+      `Slot: ${p.selectedSlot + 1} — ${heldName}`;
   }
 }

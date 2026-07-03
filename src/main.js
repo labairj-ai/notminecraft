@@ -3,7 +3,7 @@ import { World } from './world.js';
 import { Player } from './player.js';
 import { UI } from './ui.js';
 import { FirstPersonHand } from './hand.js';
-import { BLOCK_DEFS } from './blocks.js';
+import { BLOCK_DEFS, getToolAction } from './blocks.js';
 
 // ── Renderer ──────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('game-canvas');
@@ -288,16 +288,16 @@ function loop(now) {
       hlMesh.visible = false;
     }
 
-    // First-person hand
-    const info = player.getBreakInfo();
-    if (info) {
-      hand.startBreaking(info.action);
+    // First-person hand — driven by the HELD ITEM, not the block's action
+    const heldId         = player.hotbar[player.selectedSlot];
+    const heldToolAction = getToolAction(heldId); // null → bare fist
+    const info           = player.getBreakInfo();
+
+    if (info && info.canBreak) {
+      hand.startBreaking(heldToolAction || 'break');
     } else {
       hand.stopBreaking();
-      // Idle: show the tool type for the selected hotbar slot
-      const selId  = player.hotbar[player.selectedSlot];
-      const selDef = selId ? BLOCK_DEFS[selId] : null;
-      hand.switchTool(selDef?.action ?? null);
+      hand.switchTool(heldToolAction);
     }
     hand.update(dt, isMoving);
   }
