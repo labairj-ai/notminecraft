@@ -55,8 +55,11 @@ export function getCityInfo(wx, wz, worldSeed) {
 //
 // Returns { type:'road' } or { type:'building', height, isPerimeter, isCorner }
 export function getCityColumn(localX, localZ, density, citySeed) {
-  const px = mod(localX, STREET_PERIOD);
-  const pz = mod(localZ, STREET_PERIOD);
+  // localX/localZ are floats (city centre is jitter-offset from integers).
+  // Floor to integer block coords before modulo so strict-equality perimeter
+  // checks (inX === 0, inX === 9, etc.) work correctly.
+  const px = mod(Math.floor(localX), STREET_PERIOD);
+  const pz = mod(Math.floor(localZ), STREET_PERIOD);
 
   if (px < STREET_WIDTH || pz < STREET_WIDTH) {
     // Sidewalk strip along roads
@@ -99,8 +102,8 @@ export function getChunkNPCSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
     if (col.type !== 'building') continue;
 
     // Spawn on the perimeter, just outside the door opening (px=2 or pz=2)
-    const px = mod(city.localX, STREET_PERIOD);
-    const pz = mod(city.localZ, STREET_PERIOD);
+    const px = mod(Math.floor(city.localX), STREET_PERIOD);
+    const pz = mod(Math.floor(city.localZ), STREET_PERIOD);
     const isEntrance = (px === STREET_WIDTH && pz >= 4 && pz <= 7) ||
                        (pz === STREET_WIDTH && px >= 4 && px <= 7);
     if (!isEntrance) continue;
