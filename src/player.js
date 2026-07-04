@@ -201,23 +201,34 @@ export class Player {
       return;
     }
 
-    // Right-click DOOR_CLOSED → open both halves at once
-    if (targetId === B.DOOR_CLOSED) {
-      this.world.setBlock(wx, wy, wz, B.DOOR_OPEN);
-      if (this.world.getBlock(wx, wy + 1, wz) === B.DOOR_CLOSED)
-        this.world.setBlock(wx, wy + 1, wz, B.DOOR_OPEN);
-      if (this.world.getBlock(wx, wy - 1, wz) === B.DOOR_CLOSED)
-        this.world.setBlock(wx, wy - 1, wz, B.DOOR_OPEN);
-      return;
-    }
+    // Right-click any door block: toggle the ENTIRE door (all columns × both heights)
+    if (targetId === B.DOOR_CLOSED || targetId === B.DOOR_OPEN) {
+      const nextState = targetId === B.DOOR_CLOSED ? B.DOOR_OPEN : B.DOOR_CLOSED;
 
-    // Right-click DOOR_OPEN → close it (and companion block)
-    if (targetId === B.DOOR_OPEN) {
-      this.world.setBlock(wx, wy, wz, B.DOOR_CLOSED);
-      const above = this.world.getBlock(wx, wy + 1, wz);
-      const below = this.world.getBlock(wx, wy - 1, wz);
-      if (above === B.DOOR_OPEN) this.world.setBlock(wx, wy + 1, wz, B.DOOR_CLOSED);
-      else if (below === B.DOOR_OPEN) this.world.setBlock(wx, wy - 1, wz, B.DOOR_CLOSED);
+      // Toggle one column (clicked block + its vertical companion)
+      const toggleCol = (cx, cy, cz) => {
+        const b = this.world.getBlock(cx, cy, cz);
+        if (b !== B.DOOR_CLOSED && b !== B.DOOR_OPEN) return;
+        this.world.setBlock(cx, cy, cz, nextState);
+        for (const dy of [1, -1]) {
+          const bv = this.world.getBlock(cx, cy + dy, cz);
+          if (bv === B.DOOR_CLOSED || bv === B.DOOR_OPEN) {
+            this.world.setBlock(cx, cy + dy, cz, nextState);
+            break;
+          }
+        }
+      };
+
+      toggleCol(wx, wy, wz);
+
+      // Also toggle the adjacent door column (building doors are 2 blocks wide)
+      for (const [odx, odz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const ab = this.world.getBlock(wx + odx, wy, wz + odz);
+        if (ab === B.DOOR_CLOSED || ab === B.DOOR_OPEN) {
+          toggleCol(wx + odx, wy, wz + odz);
+          break;
+        }
+      }
       return;
     }
 
