@@ -5,6 +5,7 @@ import { UI } from './ui.js';
 import { FirstPersonHand } from './hand.js';
 import * as B from './blocks.js';
 import { BLOCK_DEFS, getToolAction } from './blocks.js';
+import { Minimap } from './minimap.js';
 
 // ── Renderer ──────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('game-canvas');
@@ -105,10 +106,11 @@ function updateCrackOverlay(progress, target) {
 }
 
 // ── World / Player / UI / Hand ────────────────────────────────────────────────
-const world  = new World(scene);
-const player = new Player(camera, world);
-const ui     = new UI(player, world);
-const hand   = new FirstPersonHand(renderer);
+const world   = new World(scene);
+const player  = new Player(camera, world);
+const ui      = new UI(player, world);
+const hand    = new FirstPersonHand(renderer);
+const minimap = new Minimap(document.getElementById('minimap'), world);
 
 // ── State ────────────────────────────────────────────────────────────────────
 let gameState = 'menu'; // 'menu'|'playing'|'paused'|'inventory'|'dialog'|'shop'|'driving'
@@ -569,6 +571,11 @@ function loop(now) {
   if (gameState === 'playing' || gameState === 'dialog' || gameState === 'shop') hand.render();
   // In driving mode: clear block highlight and crack overlay
   if (gameState === 'driving') { hlMesh.visible = false; crackMesh.visible = false; }
+
+  // Minimap — visible whenever the HUD is up
+  if (gameState === 'playing' || gameState === 'dialog' || gameState === 'shop' || gameState === 'driving') {
+    minimap.render(player.pos.x, player.pos.z, player.yaw, world.npcs);
+  }
 }
 
 requestAnimationFrame(loop);

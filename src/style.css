@@ -758,3 +758,28 @@ button:hover { background: #5d9c33; }
   transition: opacity 0.2s;
 }
 #npc-hint.hidden { display: none; }
+
+/* ── Minimap ────────────────────────────────────────────────────────────────── */
+#minimap-wrap {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 152px;
+  height: 152px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid rgba(0, 0, 0, 0.75);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 4px 18px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+  z-index: 30;
+  background: rgba(10, 10, 14, 0.85);
+}
+
+#minimap {
+  width: 152px;
+  height: 152px;
+  display: block;
+  image-rendering: pixelated;
+}
