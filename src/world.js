@@ -7,6 +7,7 @@ import { getCityInfo, getChunkNPCSpawns, getChunkCarSpawns, getChunkShopkeeperSp
 import { NPCManager } from './npc.js';
 import { CarManager } from './car.js';
 import { TrafficManager, getChunkTrafficSpawns } from './traffic.js';
+import { AnimalManager, getChunkAnimalSpawns } from './animals.js';
 import * as B from './blocks.js';
 
 const RENDER_DIST = 7;
@@ -48,6 +49,7 @@ export class World {
     this.npcs    = new NPCManager(scene, this);
     this.cars    = new CarManager(scene);
     this.traffic = new TrafficManager(scene);
+    this.animals = new AnimalManager(scene, this);
   }
 
   cityInfo(wx, wz) { return getCityInfo(wx, wz, this.seed); }
@@ -141,6 +143,9 @@ export class World {
           const shopSpawns = getChunkShopkeeperSpawns(cx, cz, this.seed,
             (wx, wz) => this.cityInfo(wx, wz));
           this.npcs.spawnForChunk(k + ':shop', shopSpawns);
+          const animalSpawns = getChunkAnimalSpawns(c, this.seed,
+            (wx, wz) => this.cityInfo(wx, wz));
+          this.animals.spawnForChunk(k, animalSpawns);
         }
       }
     }
@@ -154,6 +159,7 @@ export class World {
         this.npcs.despawnChunk(k + ':shop');
         this.cars.despawnChunk(k);
         this.traffic.despawnChunk(k);
+        this.animals.despawnChunk(k);
         chunk.dispose();
         this.chunks.delete(k);
       }

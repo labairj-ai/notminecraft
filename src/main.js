@@ -491,6 +491,7 @@ function loop(now) {
 
   if (gameState !== 'menu' && gameState !== 'paused') {
     world.npcs.update(dt, player.pos);
+    world.animals.update(dt, player.pos);
   }
 
   const _cityInfoFn = (wx, wz) => world.cityInfo(wx, wz);
