@@ -11,8 +11,9 @@
 // size = minimum grid dimension required (2 or 3).
 
 import {
-  WOOD, PLANKS, COBBLESTONE, CRAFTING, FURNACE, LEAVES,
-  WOOL, TORCH, CHEST, BED,
+  WOOD, PLANKS, COBBLESTONE, STONE, SAND, GRAVEL, CRAFTING, FURNACE, LEAVES,
+  WOOL, TORCH, CHEST, BED, GLASS, BRICK, MOSSY_COBBLE, CONCRETE, ASPHALT,
+  DOOR_CLOSED, SIDEWALK, CLAY,
   STICK, COAL, TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_SWORD, TOOL_HOE,
 } from './blocks.js';
 
@@ -113,6 +114,40 @@ export const RECIPES = [
   // Bed — leaves variant (accessible from day 1 with just wood + leaves)
   { size: 3, rows: [[L, L, L], [P, P, P]],
     result: { id: BED, count: 1 } },
+
+  // ── City materials ────────────────────────────────────────────────────────
+
+  // Glass: 3 sand in a row (3×3 table) → 3 glass
+  { size: 3, rows: [[SAND, SAND, SAND]],
+    result: { id: GLASS, count: 3 } },
+
+  // Brick block: 4 cobblestone 2×2 → 2 brick (compressed stone → fired brick look)
+  { size: 2, rows: [[C, C], [C, C]],
+    result: { id: BRICK, count: 2 } },
+
+  // Brick block from clay: 4 clay 2×2 → 2 brick (clay kiln-fired)
+  { size: 2, rows: [[CLAY, CLAY], [CLAY, CLAY]],
+    result: { id: BRICK, count: 2 } },
+
+  // Mossy cobblestone: cobblestone + leaves (shapeless, 2×2)
+  { size: 2, shapeless: true, ingredients: [C, LEAVES],
+    result: { id: MOSSY_COBBLE, count: 1 } },
+
+  // Concrete: 2 gravel + 2 stone → 4 concrete (shapeless, 2×2)
+  { size: 2, shapeless: true, ingredients: [GRAVEL, GRAVEL, STONE, STONE],
+    result: { id: CONCRETE, count: 4 } },
+
+  // Asphalt: 3 gravel + 1 coal → 4 asphalt (shapeless, 2×2)
+  { size: 2, shapeless: true, ingredients: [GRAVEL, GRAVEL, GRAVEL, COAL],
+    result: { id: ASPHALT, count: 4 } },
+
+  // Sidewalk: 4 stone 2×2 → 4 sidewalk paving slabs
+  { size: 2, rows: [[STONE, STONE], [STONE, STONE]],
+    result: { id: SIDEWALK, count: 4 } },
+
+  // Door: 6 planks in 2×3 pattern (3×3 table) → 1 door
+  { size: 3, rows: [[P, P], [P, P], [P, P]],
+    result: { id: DOOR_CLOSED, count: 1 } },
 ];
 
 // ── Recipe matcher ─────────────────────────────────────────────────────────────

@@ -4,8 +4,10 @@ import * as B from './blocks.js';
 export const CITY_SPACING   = 600;
 export const CITY_RADIUS    = 220;
 export const CITY_BASE_Y    = 24;
-export const STREET_PERIOD  = 20;   // 6 road + 14 building per period (wide roads for cars)
-export const STREET_WIDTH   = 6;
+export const STREET_PERIOD  = 26;   // 3 sidewalk + 6 road + 3 sidewalk + 14 building
+export const ROAD_WIDTH     = 6;    // pure asphalt (fits 2 cars with padding)
+export const SIDEWALK_WIDTH = 3;    // pavement on each side of road
+export const STREET_WIDTH   = ROAD_WIDTH + SIDEWALK_WIDTH * 2; // 12
 export const BUILDING_MAX   = STREET_PERIOD - STREET_WIDTH - 1; // 13 (far perimeter edge)
 
 export const DOOR_WIDTH     = 2;    // 2-block-wide door opening
@@ -60,7 +62,18 @@ export function getCityColumn(localX, localZ, density, citySeed) {
   const pz = mod(Math.floor(localZ), STREET_PERIOD);
 
   if (px < STREET_WIDTH || pz < STREET_WIDTH) {
-    return { type: 'road' };
+    // Within street zone — determine sidewalk vs. road lane
+    const xSide = px < STREET_WIDTH && (px < SIDEWALK_WIDTH || px >= STREET_WIDTH - SIDEWALK_WIDTH);
+    const zSide = pz < STREET_WIDTH && (pz < SIDEWALK_WIDTH || pz >= STREET_WIDTH - SIDEWALK_WIDTH);
+    let isSidewalk;
+    if (px < STREET_WIDTH && pz >= STREET_WIDTH) {
+      isSidewalk = xSide;           // pure Z-corridor
+    } else if (pz < STREET_WIDTH && px >= STREET_WIDTH) {
+      isSidewalk = zSide;           // pure X-corridor
+    } else {
+      isSidewalk = xSide && zSide;  // intersection: only true corners are sidewalk
+    }
+    return { type: 'road', isSidewalk };
   }
 
   const inX = px - STREET_WIDTH; // 0–BUILDING_MAX
@@ -183,7 +196,7 @@ export function getChunkCarSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
     if (!city) continue;
 
     const col = getCityColumn(city.localX, city.localZ, city.density, city.seed);
-    if (col.type !== 'road') continue;
+    if (col.type !== 'road' || col.isSidewalk) continue;
 
     const key = `car:${wx},${wz}`;
     if (seen.has(key)) continue;

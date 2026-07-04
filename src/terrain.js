@@ -62,7 +62,11 @@ export function generateChunkData(chunkX, chunkZ, noise2D, noise3D, worldSeed = 
           if (y < baseY)        { data[idx] = B.DIRT;     continue; }
 
           if (col.type === 'road') {
-            data[idx] = (y === baseY) ? B.ASPHALT : B.AIR;
+            if (col.isSidewalk) {
+              data[idx] = (y === baseY) ? B.SIDEWALK : B.AIR;
+            } else {
+              data[idx] = (y === baseY) ? B.ASPHALT : B.AIR;
+            }
             continue;
           }
 
@@ -158,8 +162,11 @@ export function generateChunkData(chunkX, chunkZ, noise2D, noise3D, worldSeed = 
         }
 
         if (isSurface) {
-          if (belowSea) { data[idx] = B.SAND; }
-          else if (isDesert) { data[idx] = B.SAND; }
+          if (belowSea && !isDesert) {
+            // River/lake beds: clay patches amid sand
+            const clayN = noise2D(wx * 0.05 + 777, wz * 0.05 + 777);
+            data[idx] = (clayN > 0.2) ? B.CLAY : B.SAND;
+          } else if (belowSea || isDesert) { data[idx] = B.SAND; }
           else if (isSnowy)  { data[idx] = B.SNOW_BLOCK; }
           else               { data[idx] = B.GRASS; }
           continue;

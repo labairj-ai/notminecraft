@@ -36,6 +36,8 @@ export const CONCRETE      = 33;  // city building material
 export const ASPHALT       = 34;  // city road
 export const DOOR_CLOSED   = 35;  // wooden door (solid, right-click to open)
 export const DOOR_OPEN     = 36;  // open doorway (passable, right-click to close)
+export const SIDEWALK      = 37;  // city pavement
+export const CLAY          = 38;  // raw clay (found underwater)
 
 // ── Tool / material item IDs (not placeable blocks) ──────────────────────────
 export const TOOL_PICKAXE  = 50;
@@ -92,6 +94,8 @@ export const BLOCK_DEFS = [
   { name:'Asphalt',       solid:true,  action:'mine',  breakTime:1.5,  requiresTool:true,               textures:{ all:[9,2] },                            color:'#2c2c2c' },
   { name:'Door',          solid:true,  action:'chop',  breakTime:1.0,  requiresTool:false, handMult:3.0, textures:{ all:[10,2] },                           color:'#7a4010' },
   { name:'Door (Open)',   solid:false, action:'break', breakTime:0.1,  requiresTool:false, handMult:1.0, transparent:true, textures:{ all:[11,2] },          color:'rgba(120,70,20,0.15)' },
+  { name:'Sidewalk',      solid:true,  action:'mine',  breakTime:1.0,  requiresTool:true,               textures:{ all:[12,2] },                            color:'#c8c8c4' },
+  { name:'Clay',          solid:true,  action:'dig',   breakTime:0.5,  requiresTool:false, handMult:1.5, textures:{ all:[13,2] },                            color:'#8090a8' },
 ];
 
 // ── Tool definitions ───────────────────────────────────────────────────────────
@@ -177,7 +181,7 @@ export const ALL_BLOCKS = [
   COBBLESTONE, GLASS, SNOW_BLOCK, ICE, CRAFTING, FURNACE,
   COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE, GLOWSTONE, TNT,
   OBSIDIAN, BRICK, BOOKSHELF, MOSSY_COBBLE, SPONGE, LAVA,
-  WOOL, TORCH, CHEST, BED, CONCRETE, ASPHALT, DOOR_CLOSED,
+  WOOL, TORCH, CHEST, BED, CONCRETE, ASPHALT, DOOR_CLOSED, SIDEWALK, CLAY,
 ];
 
 // All items shown in the creative picker (tools + materials + blocks)

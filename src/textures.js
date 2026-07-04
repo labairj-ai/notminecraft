@@ -455,6 +455,31 @@ export function createAtlas() {
   ctx.fillRect(7*TEX_SIZE+2, 2*TEX_SIZE+1, 12, 4);
   noise(ctx, 7, 2, ['rgba(200,200,230,0.5)'], 0.2, 721);
 
+  // [12,2] sidewalk (light gray pavement slabs with joint lines)
+  fill(ctx, 12, 2, '#c4c4be');
+  noise(ctx, 12, 2, ['#cecec8','#b8b8b2','#c8c8c2','#bababc'], 0.2, 1220);
+  // pavement slab grid (2×2 squares, 8px each)
+  ctx.fillStyle = '#9a9a96';
+  hLine(ctx, 12, 2, 0,  '#9a9a96');
+  hLine(ctx, 12, 2, 7,  '#9a9a96');
+  hLine(ctx, 12, 2, 15, '#9a9a96');
+  vLine(ctx, 12, 2, 0,  '#9a9a96');
+  vLine(ctx, 12, 2, 7,  '#9a9a96');
+  vLine(ctx, 12, 2, 15, '#9a9a96');
+  // slight inner edge highlight on each slab
+  ctx.fillStyle = '#d4d4ce';
+  ctx.fillRect(12*TEX_SIZE+1, 2*TEX_SIZE+1, 6, 1);
+  ctx.fillRect(12*TEX_SIZE+1, 2*TEX_SIZE+1, 1, 5);
+  ctx.fillRect(12*TEX_SIZE+8, 2*TEX_SIZE+8, 6, 1);
+  ctx.fillRect(12*TEX_SIZE+8, 2*TEX_SIZE+8, 1, 6);
+
+  // [13,2] clay (smooth blue-gray with subtle layering)
+  fill(ctx, 13, 2, '#8494aa');
+  noise(ctx, 13, 2, ['#7888a0','#90a0b4','#7c8ca2','#8ea0b8'], 0.3, 1320);
+  // faint horizontal strata lines
+  hLine(ctx, 13, 2, 5,  'rgba(100,115,135,0.5)');
+  hLine(ctx, 13, 2, 10, 'rgba(100,115,135,0.5)');
+
   return canvas;
 }
 
