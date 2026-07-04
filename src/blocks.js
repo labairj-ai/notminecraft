@@ -38,6 +38,15 @@ export const DOOR_CLOSED   = 35;  // wooden door (solid, right-click to open)
 export const DOOR_OPEN     = 36;  // open doorway (passable, right-click to close)
 export const SIDEWALK      = 37;  // city pavement
 export const CLAY          = 38;  // raw clay (found underwater)
+export const CHAIR         = 39;
+export const TABLE         = 40;
+export const LAMP          = 41;  // emissive amber
+export const COUNTER       = 42;  // kitchen/bar counter
+export const DESK          = 43;
+export const TV            = 44;  // dark screen
+export const STOOL         = 45;  // bar/office stool
+export const FILING_CABINET = 46;
+export const ESCALATOR_UP  = 47;
 
 // ── Tool / material item IDs (not placeable blocks) ──────────────────────────
 export const TOOL_PICKAXE  = 50;
@@ -48,6 +57,9 @@ export const COAL          = 54;  // drops from COAL_ORE; crafts torches
 export const TOOL_SWORD    = 55;
 export const TOOL_HOE      = 56;
 export const GOLD_COIN     = 57;  // currency
+export const IRON_INGOT    = 60;  // crafted from iron ore
+export const STEEL_INGOT   = 61;  // iron ingot + coal
+export const VEHICLE       = 62;  // deployable car
 
 // ── Block definitions ─────────────────────────────────────────────────────────
 // action      – which tool class applies ('dig'|'chop'|'mine'|'break')
@@ -96,6 +108,15 @@ export const BLOCK_DEFS = [
   { name:'Door (Open)',   solid:false, action:'break', breakTime:0.1,  requiresTool:false, handMult:1.0, transparent:true, textures:{ all:[11,2] },          color:'rgba(120,70,20,0.15)' },
   { name:'Sidewalk',      solid:true,  action:'mine',  breakTime:1.0,  requiresTool:true,               textures:{ all:[12,2] },                            color:'#c8c8c4' },
   { name:'Clay',          solid:true,  action:'dig',   breakTime:0.5,  requiresTool:false, handMult:1.5, textures:{ all:[13,2] },                            color:'#8090a8' },
+  { name:'Chair',          solid:true, action:'chop', breakTime:0.8, requiresTool:false, handMult:3.0, textures:{ all:[0,3] }, color:'#8B6030' },
+  { name:'Table',          solid:true, action:'chop', breakTime:1.0, requiresTool:false, handMult:3.5, textures:{ all:[1,3] }, color:'#c8a264' },
+  { name:'Lamp',           solid:true, action:'break', breakTime:0.3, requiresTool:false, handMult:1.0, emissive:true, textures:{ all:[2,3] }, color:'#f0c040' },
+  { name:'Counter',        solid:true, action:'mine', breakTime:1.5, requiresTool:true, textures:{ all:[3,3] }, color:'#909090' },
+  { name:'Desk',           solid:true, action:'chop', breakTime:1.0, requiresTool:false, handMult:3.5, textures:{ all:[4,3] }, color:'#a07030' },
+  { name:'TV',             solid:true, action:'break', breakTime:0.5, requiresTool:false, handMult:1.0, emissive:true, textures:{ top:[5,3], side:[5,3], bottom:[5,3] }, color:'#111111' },
+  { name:'Stool',          solid:true, action:'chop', breakTime:0.6, requiresTool:false, handMult:3.0, textures:{ all:[6,3] }, color:'#7a5230' },
+  { name:'Filing Cabinet', solid:true, action:'mine', breakTime:1.5, requiresTool:true, textures:{ all:[7,3] }, color:'#808080' },
+  { name:'Escalator',     solid:false, action:'break', breakTime:0.3, requiresTool:false, handMult:1.0, emissive:true, textures:{ all:[8,3] }, color:'#f0c040' },
 ];
 
 // ── Tool definitions ───────────────────────────────────────────────────────────
@@ -112,6 +133,9 @@ export const ITEM_DEFS = {
   [STICK]: { name:'Stick', isItem:true, maxStack:64 },
   [COAL]:      { name:'Coal',      isItem:true, maxStack:64 },
   [GOLD_COIN]: { name:'Gold Coin', isItem:true, maxStack:999 },
+  [IRON_INGOT]:    { name:'Iron Ingot',   isItem:true, maxStack:64 },
+  [STEEL_INGOT]:   { name:'Steel Ingot',  isItem:true, maxStack:64 },
+  [VEHICLE]:       { name:'Vehicle',      isItem:true, maxStack:1  },
 };
 
 // ── Block drop overrides (id → drop instead of the block itself) ───────────────
@@ -182,6 +206,7 @@ export const ALL_BLOCKS = [
   COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE, GLOWSTONE, TNT,
   OBSIDIAN, BRICK, BOOKSHELF, MOSSY_COBBLE, SPONGE, LAVA,
   WOOL, TORCH, CHEST, BED, CONCRETE, ASPHALT, DOOR_CLOSED, SIDEWALK, CLAY,
+  CHAIR, TABLE, LAMP, COUNTER, DESK, TV, STOOL, FILING_CABINET, ESCALATOR_UP,
 ];
 
 // All items shown in the creative picker (tools + materials + blocks)

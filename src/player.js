@@ -219,6 +219,19 @@ export class Player {
       return;
     }
 
+    // VEHICLE item → deploy a car on the road surface you're looking at
+    {
+      const slot = this.hotbar[this.selectedSlot];
+      if (slot?.id === B.VEHICLE && targetId === B.ASPHALT) {
+        const spawnY = wy + 1.26;
+        const heading = Math.round(this.yaw / (Math.PI / 2)) * (Math.PI / 2);
+        this.world.cars.deployAt(this.world.scene, wx + 0.5, spawnY, wz + 0.5, heading);
+        slot.count--;
+        if (slot.count === 0) this.hotbar[this.selectedSlot] = null;
+        return;
+      }
+    }
+
     // Otherwise place a block on the adjacent face
     if (!face) return;
     const nx = wx + face[0];
@@ -328,6 +341,16 @@ export class Player {
     } else {
       this.vel.y -= GRAVITY * dt;
       if (this.vel.y < -40) this.vel.y = -40;
+    }
+
+    // Escalator: carry player upward when inside an escalator block
+    if (!this.flying) {
+      const bx = Math.floor(this.pos.x);
+      const bz = Math.floor(this.pos.z);
+      if (this.world.getBlock(bx, Math.floor(this.pos.y),       bz) === B.ESCALATOR_UP ||
+          this.world.getBlock(bx, Math.floor(this.pos.y + 0.9), bz) === B.ESCALATOR_UP) {
+        this.vel.y = 5.5;
+      }
     }
 
     const nx = this.pos.x + this.vel.x * dt;

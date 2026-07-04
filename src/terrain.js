@@ -4,30 +4,84 @@ import { getCityInfo, getCityColumn, CITY_BASE_Y, DOOR_HEIGHT } from './city.js'
 // Returns the block to place at a given interior cell above the floor slab.
 // inX/inZ: 1-12 (interior coords within building), floorNum: 0=ground, 1+
 // blockInFlr: 1 or 2 (position within the 3-block floor period, 0=slab itself)
-function interiorBlock(inX, inZ, floorNum, blockInFlr, wallAxisX) {
-  // Partition wall divides building into two rooms (with a 3-block passage at centre)
-  const isPartCol  = wallAxisX ? (inX === 7) : (inZ === 7);
-  const inPassage  = wallAxisX ? (inZ >= 5 && inZ <= 7) : (inX >= 5 && inX <= 7);
+// buildingType: 'residential'|'commercial'|'office'|'restaurant'
+function interiorBlock(inX, inZ, floorNum, blockInFlr, wallAxisX, buildingType) {
+  // Escalator column — non-solid, carries player upward
+  if (inX === 2 && inZ === 2) return B.ESCALATOR_UP;
+  // Step-off shaft — kept clear so players can drop down
+  if (inX === 3 && inZ === 2) return B.AIR;
+
+  // Partition wall divides building into two rooms (3-block passage at centre)
+  const isPartCol = wallAxisX ? (inX === 7) : (inZ === 7);
+  const inPassage = wallAxisX ? (inZ >= 5 && inZ <= 7) : (inX >= 5 && inX <= 7);
   if (isPartCol && !inPassage) return B.PLANKS;
 
-  // Furniture only at the first block above the floor slab
+  // Only place furniture at blockInFlr === 1 (just above floor slab)
   if (blockInFlr !== 1) return B.AIR;
 
-  // Corner items pushed against interior walls
+  // Shared corner anchors
   if (inX === 1  && inZ === 1)  return B.CHEST;
   if (inX === 12 && inZ === 12) return B.CHEST;
-  if (inX === 1  && inZ === 12) return B.BOOKSHELF;
-  if (inX === 12 && inZ === 1)  return B.BOOKSHELF;
 
-  // Ground floor utility blocks
-  if (floorNum === 0 && inX === 4 && inZ === 4) return B.CRAFTING;
-  if (floorNum === 0 && inX === 9 && inZ === 4) return B.FURNACE;
+  switch (buildingType) {
 
-  // Upper floor beds (residential rooms)
-  if (floorNum > 0 && inX === 4 && inZ === 10) return B.BED;
-  if (floorNum > 0 && inX === 9 && inZ === 10) return B.BED;
+    case 'residential':
+      if (inX === 1  && inZ === 12) return B.BOOKSHELF;
+      if (inX === 12 && inZ === 1)  return B.BOOKSHELF;
+      if (floorNum === 0 && inX === 4 && inZ === 4) return B.COUNTER;
+      if (floorNum === 0 && inX === 9 && inZ === 4) return B.FURNACE;
+      if (floorNum === 0 && inX === 6 && inZ === 8) return B.TABLE;
+      if (floorNum === 0 && inX === 5 && inZ === 8) return B.CHAIR;
+      if (floorNum === 0 && inX === 7 && inZ === 8) return B.CHAIR;
+      if (floorNum === 0 && inX === 3 && inZ === 2) return B.LAMP;
+      if (floorNum > 0  && inX === 4 && inZ === 10) return B.BED;
+      if (floorNum > 0  && inX === 9 && inZ === 10) return B.BED;
+      if (floorNum > 0  && inX === 4 && inZ === 3)  return B.DESK;
+      if (floorNum > 0  && inX === 3 && inZ === 2)  return B.LAMP;
+      return B.AIR;
 
-  return B.AIR;
+    case 'restaurant':
+      if (inX === 1  && inZ === 12) return B.FURNACE;
+      if (inX === 12 && inZ === 1)  return B.CRAFTING;
+      // Counter bar along back wall (inZ=1..3)
+      if (inZ <= 3 && inX >= 2 && inX <= 11) return B.COUNTER;
+      // Stools at bar
+      if (inZ === 4 && inX >= 2 && inX <= 11 && inX % 2 === 0) return B.STOOL;
+      // Dining tables (groups of 2)
+      if (inZ >= 6 && inZ <= 10 && inX >= 2 && inX <= 11) {
+        if ((inX % 3 === 0) && (inZ % 3 === 0)) return B.TABLE;
+        if ((inX % 3 === 1) && (inZ % 3 === 0)) return B.CHAIR;
+        if ((inX % 3 === 2) && (inZ % 3 === 0)) return B.CHAIR;
+      }
+      if (inX === 11 && inZ === 12) return B.LAMP;
+      if (inX === 2  && inZ === 12) return B.LAMP;
+      return B.AIR;
+
+    case 'office':
+      if (inX === 1  && inZ === 12) return B.BOOKSHELF;
+      if (inX === 12 && inZ === 1)  return B.BOOKSHELF;
+      // Desk rows
+      if (inZ >= 2 && inZ <= 10 && inZ % 3 === 2 && inX >= 2 && inX <= 11) return B.DESK;
+      if (inZ >= 2 && inZ <= 10 && inZ % 3 === 0 && inX >= 2 && inX <= 11 && inX % 2 === 0) return B.CHAIR;
+      // Filing cabinets along side wall
+      if (inX === 2 && inZ >= 2 && inZ <= 10 && inZ % 4 === 2) return B.FILING_CABINET;
+      // TV on one wall (ground floor)
+      if (floorNum === 0 && inX === 11 && inZ === 12) return B.TV;
+      if (inX === 11 && inZ === 2) return B.LAMP;
+      if (inX === 2  && inZ === 11) return B.LAMP;
+      return B.AIR;
+
+    case 'commercial':
+    default:
+      if (inX === 1  && inZ === 12) return B.BOOKSHELF;
+      if (inX === 12 && inZ === 1)  return B.CRAFTING;
+      // Shop counter along back
+      if (inZ <= 3 && inX >= 2 && inX <= 11) return B.COUNTER;
+      // Display chests
+      if (inZ >= 5 && inZ <= 9 && inX >= 3 && inX <= 10 && inX % 4 === 3 && inZ % 4 === 1) return B.CHEST;
+      if (inX === 3 && inZ === 11) return B.LAMP;
+      return B.AIR;
+  }
 }
 
 export const CHUNK_SIZE   = 16;
@@ -91,11 +145,17 @@ export function generateChunkData(chunkX, chunkZ, noise2D, noise3D, worldSeed = 
             } else {
               // ── Interior ────────────────────────────────────────────────
               const blockInFlr = relY % 3;
+              const floorNum   = Math.floor(relY / 3);
               if (blockInFlr === 0) {
-                data[idx] = B.PLANKS; // floor slab at every level
+                // Escalator shaft: open floor hole for upper floors
+                if (floorNum >= 1 &&
+                    ((col.inX === 2 && col.inZ === 2) || (col.inX === 3 && col.inZ === 2))) {
+                  data[idx] = B.AIR;
+                } else {
+                  data[idx] = B.PLANKS;
+                }
               } else {
-                const floorNum = Math.floor(relY / 3);
-                data[idx] = interiorBlock(col.inX, col.inZ, floorNum, blockInFlr, col.wallAxisX);
+                data[idx] = interiorBlock(col.inX, col.inZ, floorNum, blockInFlr, col.wallAxisX, col.buildingType);
               }
             }
           } else if (y === baseY + bh + 1) {

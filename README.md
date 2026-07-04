@@ -36,7 +36,7 @@ Open the URL shown in the terminal (usually `http://localhost:5175`).
 - Water, lava, ice, snow
 
 ### Blocks & Tools
-- 34 block types with distinct hardness and tool requirements
+- 47 block types including furniture and city infrastructure
 - Tool tiers: pickaxe (mining), axe (chopping), shovel (digging)
 - Sword, hoe, and hand breaking
 - Coal drops from coal ore; crafting materials stack up to 64
@@ -45,28 +45,45 @@ Open the URL shown in the terminal (usually `http://localhost:5175`).
 - 2×2 pocket crafting grid (E key)
 - 3×3 crafting table (right-click a Crafting Table block)
 - Bounding-box recipe matching — place recipes anywhere in the grid
-- Recipes: planks, sticks, all tools, torches, chest, crafting table, furnace, bed
+- Recipes: planks, sticks, all tools, torches, chest, furnace, bed, furniture, vehicles, escalators
 
 ### Cities
 - Procedurally placed cities on a seeded ~600-block grid
-- Concrete skyscrapers with glass windows, asphalt streets, flat rooftops
-- Cities blend into natural terrain at their edges
+- Building types: commercial, restaurant, office, residential — each with distinct interior layouts
+- Multi-floor buildings with escalators to travel between floors
+- Concrete skyscrapers with glass windows, asphalt streets, sidewalks, traffic lights
 
-### NPCs
-- Three NPC types: **Merchant**, **Citizen**, **Builder**
-- Blocky humanoid characters with idle animation and player-facing rotation
-- Walk up and press **F** to open a dialog
+### NPCs & Dialogue
+- **Street NPCs**: merchants, citizens, builders, businesspeople, police, tourists
+- **Building workers**: shopkeepers, chefs, office workers, researchers — dedicated to their buildings and never leave
+- Branching conversation trees with selectable options:
+  - **Easy** (shopkeeper): friendly, leads directly to the shop
+  - **Tough** (chef): confrontational haggling path
+  - **Dead-end** (office worker): dismissive, goes nowhere
+  - **Informative** (researcher): teaches biomes, resources, city mechanics, crafting tips
+- All NPCs have idle animation and face the player when nearby
 
-### Dialog & Shops
-- Merchants run named shops (City Hardware, Tools & More, The General Store, etc.)
-- Buy blocks, materials, and tools using **Gold Coins** (you start with 50)
+### Shops & Economy
+- Talk to a shopkeeper or merchant and navigate the dialogue to open the shop
+- **Buy tab**: browse items with block-icon previews and gold coin prices
+- **Sell tab**: sell materials from your inventory for half the buy price
 - Three shop inventories: hardware, tools, general goods
-- Citizens and builders share ambient city dialogue
+- Gold Coins currency (start with 50)
+
+### Escalators
+- Amber glowing escalator blocks carry the player upward through multi-floor buildings
+- Walk into the escalator column to ride up; step off at any floor through the shaft opening
+- Craftable: 2 iron ingots + 2 glowstone in a 2×2 grid → 4 escalator blocks
 
 ### Inventory
 - 9-slot hotbar + 18-slot main inventory
 - Stack management (up to 64 per slot for blocks/materials, 1 for tools)
 - Click-to-pick-up cursor dragging inside the inventory screen
+
+### Vehicles & Traffic
+- Craftable vehicles (4 steel + 2 iron + 1 glass)
+- City traffic system with AI cars on road lanes
+- Traffic lights at intersections
 
 ## Tech Stack
 

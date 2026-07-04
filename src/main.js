@@ -236,10 +236,17 @@ document.addEventListener('inventoryClosed', () => {
 });
 
 // ── NPC shop open ─────────────────────────────────────────────────────────────
-document.addEventListener('openShop', () => {
+document.addEventListener('openShop', (e) => {
   if (!activeNPC || gameState !== 'dialog') return;
+  const mode = e.detail?.mode || 'buy';
   gameState = 'shop';
-  ui.openShop(activeNPC, player);
+  ui.openShop(activeNPC, player, mode);
+});
+
+// ── Dialog close (from tree option) ──────────────────────────────────────────
+document.addEventListener('dialogClose', () => {
+  if (gameState !== 'dialog') return;
+  closeDialogOrShop();
 });
 
 // ── Shop closed (back to dialog) ──────────────────────────────────────────────
@@ -247,7 +254,7 @@ document.addEventListener('shopClosed', () => {
   if (gameState !== 'shop') return;
   gameState = 'dialog';
   ui.closeShop();
-  ui.openDialog(activeNPC);
+  ui.openDialog(activeNPC); // re-open dialog (tree NPCs resume from start)
 });
 
 // ── Crafting table event (right-click on crafting table block) ────────────────
@@ -331,7 +338,7 @@ function enterCar(car) {
   player.active = false; // disable player FPS controls; camera follows car
   document.exitPointerLock();
   const hint = document.getElementById('npc-hint');
-  hint.textContent = 'WASD = Drive  |  E = Exit Car';
+  hint.textContent = 'WASD / Arrows = Drive  |  E or Esc = Exit Car';
   hint.classList.remove('hidden');
 }
 
@@ -383,6 +390,48 @@ document.getElementById('shop-close-btn').addEventListener('click', () => {
   closeDialogOrShop();
 });
 
+// ── Dev helpers ───────────────────────────────────────────────────────────────
+window.__tp = (x, y, z) => { player.pos.set(x, y ?? 30, z); player.vel.set(0,0,0); };
+window.__findCity = () => {
+  for (let x = 0; x < 1200; x += 10) {
+    for (let z = 0; z < 1200; z += 10) {
+      const ci = world.cityInfo(x, z);
+      if (ci) {
+        window.__tp(ci.centerX, 40, ci.centerZ);
+        return `City at ${ci.centerX.toFixed(0)},${ci.centerZ.toFixed(0)}`;
+      }
+    }
+  }
+  return 'No city found in scan range';
+};
+window.__findShopkeeper = (role) => {
+  let fallback = null;
+  for (const npc of world.npcs._npcs.values()) {
+    if (npc.type === 'shopkeeper') {
+      if (!role || npc.role === role) {
+        window.__tp(npc.homePos.x, npc.homePos.y + 1, npc.homePos.z);
+        return `Found ${npc.name} (${npc.role}) at ${npc.homePos.x.toFixed(1)},${npc.homePos.z.toFixed(1)}`;
+      }
+      fallback = npc;
+    }
+  }
+  if (fallback && !role) {
+    window.__tp(fallback.homePos.x, fallback.homePos.y + 1, fallback.homePos.z);
+    return `Found ${fallback.name} (${fallback.role}) at ${fallback.homePos.x.toFixed(1)},${fallback.homePos.z.toFixed(1)}`;
+  }
+  // List all loaded roles
+  const loaded = [...world.npcs._npcs.values()].filter(n => n.type === 'shopkeeper').map(n => n.role);
+  return `No ${role||'shopkeeper'} found. Loaded: ${[...new Set(loaded)].join(', ')||'none'}`;
+};
+window.__openShopkeeperDialog = (role) => {
+  for (const npc of world.npcs._npcs.values()) {
+    if (npc.type === 'shopkeeper' && (!role || npc.role === role)) {
+      openDialog(npc); return npc.name + ' (' + npc.role + ')';
+    }
+  }
+  return 'none';
+};
+
 // ── Start game ────────────────────────────────────────────────────────────────
 function startGame() {
   document.getElementById('menu-screen').classList.add('hidden');
@@ -407,12 +456,18 @@ function loop(now) {
     world.npcs.update(dt, player.pos);
   }
 
+  const _cityInfoFn = (wx, wz) => world.cityInfo(wx, wz);
+
+  if (gameState !== 'menu' && gameState !== 'paused') {
+    world.traffic.update(dt);
+  }
+
   if ((gameState === 'playing' || gameState === 'dialog' || gameState === 'shop') && !activeCar) {
-    world.cars.update(dt, {}, null);
+    world.cars.update(dt, null, null, world.traffic, _cityInfoFn);
   }
 
   if (gameState === 'driving' && activeCar) {
-    world.cars.update(dt, player.keys, activeCar);
+    world.cars.update(dt, player.keys, activeCar, world.traffic, _cityInfoFn);
     // Sync player position to car so chunks load around it
     player.pos.copy(activeCar.pos);
     world.update(activeCar.pos.x, activeCar.pos.z);
@@ -435,11 +490,19 @@ function loop(now) {
     world.update(player.pos.x, player.pos.z);
     ui.update(dt);
 
-    // NPC nearby hint
+    // Nearby context hint
     const npcHint = document.getElementById('npc-hint');
     const nearNPC = world.npcs.getNearest(player.pos, 4);
-    if (nearNPC) npcHint.classList.remove('hidden');
-    else          npcHint.classList.add('hidden');
+    const nearCarHint = world.cars.getNearest(player.pos, 3.5);
+    if (nearCarHint && !nearCarHint.occupied) {
+      npcHint.textContent = 'Press E to enter car';
+      npcHint.classList.remove('hidden');
+    } else if (nearNPC) {
+      npcHint.textContent = 'Press F to talk';
+      npcHint.classList.remove('hidden');
+    } else {
+      npcHint.classList.add('hidden');
+    }
 
     // Crack overlay
     updateCrackOverlay(player.getBreakProgress(), player.breakTarget);

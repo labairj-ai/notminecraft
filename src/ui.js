@@ -4,6 +4,7 @@ import {
   TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_SWORD, TOOL_HOE,
   STICK, COAL, GOLD_COIN,
 } from './blocks.js';
+import { SELL_PRICES } from './npc.js';
 import { createAtlas, TEX_SIZE } from './textures.js';
 import { matchRecipe } from './crafting.js';
 
@@ -527,54 +528,135 @@ export class UI {
   // ── Dialog ────────────────────────────────────────────────────────────────
 
   openDialog(npc) {
-    const s = document.getElementById('dialog-screen');
-    document.getElementById('dialog-npc-name').textContent  = npc.name;
+    this._dialogNPC  = npc;
+    this._treeActive = !!npc.conversationTree;
+
+    this._renderDialogHeader(npc);
+
+    if (this._treeActive) {
+      this._treeNode = npc.conversationTree.nodes[npc.conversationTree.start];
+      document.getElementById('dialog-actions').classList.add('hidden');
+      document.getElementById('dialog-options').classList.remove('hidden');
+      this._renderTreeNode();
+    } else {
+      document.getElementById('dialog-options').classList.add('hidden');
+      document.getElementById('dialog-actions').classList.remove('hidden');
+      document.getElementById('dialog-text').textContent = npc.nextLine();
+      const shopBtn = document.getElementById('dialog-shop-btn');
+      shopBtn.classList.toggle('hidden', npc.type !== 'merchant');
+    }
+
+    document.getElementById('dialog-screen').classList.remove('hidden');
+  }
+
+  _renderDialogHeader(npc) {
+    document.getElementById('dialog-npc-name').textContent = npc.name;
     const BADGES = {
       merchant: 'Merchant', builder: 'Builder', police: 'Officer',
       businessperson: 'Business', tourist: 'Tourist', citizen: 'Citizen',
+      shopkeeper: 'Shopkeeper',
     };
-    document.getElementById('dialog-npc-badge').textContent = BADGES[npc.type] || 'Citizen';
-    document.getElementById('dialog-text').textContent = npc.nextLine();
+    const ROLE_BADGES = {
+      shopkeeper: 'Shopkeeper', chef: 'Chef',
+      office_worker: 'Office Worker', researcher: 'Researcher',
+    };
+    document.getElementById('dialog-npc-badge').textContent =
+      (npc.role && ROLE_BADGES[npc.role]) || BADGES[npc.type] || 'Citizen';
 
-    const shopBtn = document.getElementById('dialog-shop-btn');
-    if (npc.type === 'merchant') {
-      shopBtn.classList.remove('hidden');
-    } else {
-      shopBtn.classList.add('hidden');
-    }
-
-    // Draw avatar (block-coloured square)
-    const av  = document.getElementById('dialog-avatar');
-    const ctx = av.getContext('2d');
-    ctx.clearRect(0, 0, 48, 48);
     const AVATAR_COLORS = {
       merchant: '#f59e0b', builder: '#d97706', police: '#1d4ed8',
       businessperson: '#4b5563', tourist: '#f472b6', citizen: '#3b82f6',
+      shopkeeper: '#7c3aed',
     };
-    const skinColor = AVATAR_COLORS[npc.type] || '#3b82f6';
-    ctx.fillStyle = skinColor;
-    ctx.fillRect(10, 4, 28, 28);  // head
-    ctx.fillStyle = npc.type === 'merchant' ? '#92400e' : '#1e3a5f';
-    ctx.fillRect(8, 32, 32, 14);   // body
-    ctx.fillStyle = '#f0c898';
-    ctx.fillRect(13, 8, 22, 20);   // face
+    const ROLE_COLORS = {
+      shopkeeper: '#7c3aed', chef: '#ef4444',
+      office_worker: '#0ea5e9', researcher: '#4b5563',
+    };
+    const bodyColor  = (npc.role && ROLE_COLORS[npc.role]) || AVATAR_COLORS[npc.type] || '#3b82f6';
+    const shirtColor = bodyColor;
 
-    s.classList.remove('hidden');
+    const av  = document.getElementById('dialog-avatar');
+    const ctx = av.getContext('2d');
+    ctx.clearRect(0, 0, 48, 48);
+    ctx.fillStyle = shirtColor;
+    ctx.fillRect(10, 4, 28, 28);
+    ctx.fillStyle = shirtColor;
+    ctx.fillRect(8, 32, 32, 14);
+    ctx.fillStyle = '#f0c898';
+    ctx.fillRect(13, 8, 22, 20);
+  }
+
+  _renderTreeNode() {
+    const node = this._treeNode;
+    document.getElementById('dialog-text').textContent = node.text;
+    const opts = document.getElementById('dialog-options');
+    opts.innerHTML = '';
+    for (const opt of node.options) {
+      const btn = document.createElement('button');
+      btn.className = 'dlg-opt';
+      if (opt.action === 'buy')   btn.classList.add('action-buy');
+      if (opt.action === 'sell')  btn.classList.add('action-sell');
+      if (opt.action === 'close') btn.classList.add('action-close');
+      btn.textContent = opt.text;
+      btn.addEventListener('click', () => this._selectTreeOption(opt));
+      opts.appendChild(btn);
+    }
+  }
+
+  _selectTreeOption(opt) {
+    if (opt.action === 'buy') {
+      document.dispatchEvent(new CustomEvent('openShop', { detail: { mode: 'buy' } }));
+      return;
+    }
+    if (opt.action === 'sell') {
+      document.dispatchEvent(new CustomEvent('openShop', { detail: { mode: 'sell' } }));
+      return;
+    }
+    if (opt.action === 'close' || !opt.next) {
+      document.dispatchEvent(new CustomEvent('dialogClose'));
+      return;
+    }
+    const nextNode = this._dialogNPC.conversationTree.nodes[opt.next];
+    if (nextNode) { this._treeNode = nextNode; this._renderTreeNode(); }
   }
 
   closeDialog() {
     document.getElementById('dialog-screen').classList.add('hidden');
+    document.getElementById('dialog-options').classList.add('hidden');
+    document.getElementById('dialog-actions').classList.remove('hidden');
   }
 
   // ── Shop ──────────────────────────────────────────────────────────────────
 
-  openShop(npc, player) {
+  openShop(npc, player, mode = 'buy') {
     this._shopPlayer = player;
     this._shopNPC    = npc;
+    this._shopMode   = mode;
     document.getElementById('shop-npc-name').textContent = npc.name;
+    this._setShopTab(mode);
     this._refreshShop();
     document.getElementById('shop-screen').classList.remove('hidden');
     document.getElementById('dialog-screen').classList.add('hidden');
+
+    document.getElementById('shop-tab-buy').onclick = () => {
+      this._shopMode = 'buy';
+      this._setShopTab('buy');
+      this._refreshShop();
+    };
+    document.getElementById('shop-tab-sell').onclick = () => {
+      this._shopMode = 'sell';
+      this._setShopTab('sell');
+      this._refreshShop();
+    };
+  }
+
+  _setShopTab(mode) {
+    document.getElementById('shop-tab-buy') .classList.toggle('active', mode === 'buy');
+    document.getElementById('shop-tab-sell').classList.toggle('active', mode === 'sell');
+    // Show sell tab only for NPCs that accept selling (have wares or are shopkeeper)
+    const npc = this._shopNPC;
+    const canSell = npc && (npc.wares || npc.type === 'shopkeeper');
+    document.getElementById('shop-tab-sell').style.display = canSell ? '' : 'none';
   }
 
   _refreshShop() {
@@ -586,6 +668,21 @@ export class UI {
     const grid = document.getElementById('shop-items-grid');
     grid.innerHTML = '';
 
+    if (this._shopMode === 'sell') {
+      this._renderSellGrid(player, grid);
+    } else {
+      this._renderBuyGrid(player, npc, coins, grid);
+    }
+  }
+
+  _renderBuyGrid(player, npc, coins, grid) {
+    if (!npc.wares) {
+      const msg = document.createElement('p');
+      msg.style.cssText = 'color:#888;text-align:center;padding:20px 0';
+      msg.textContent = 'This vendor has nothing to sell.';
+      grid.appendChild(msg);
+      return;
+    }
     for (const item of npc.wares) {
       const card = document.createElement('div');
       card.className = 'shop-item-card' + (coins < item.price ? ' cannot-afford' : '');
@@ -613,12 +710,64 @@ export class UI {
         const removed = player.removeItem(GOLD_COIN, item.price);
         if (removed < item.price) { player.addItem(GOLD_COIN, removed); return; }
         player.addItem(item.id, item.count);
-        document.getElementById('shop-status').textContent =
-          `Bought: ${item.label}`;
+        document.getElementById('shop-status').textContent = `Bought: ${item.label}`;
         this._refreshShop();
       });
       card.appendChild(btn);
+      grid.appendChild(card);
+    }
+  }
 
+  _renderSellGrid(player, grid) {
+    // Gather all sellable items from hotbar + inventory
+    const allSlots = [
+      ...player.hotbar.map((s, i) => ({ s, src: 'hotbar', i })),
+      ...player.inventory.map((s, i) => ({ s, src: 'inv', i })),
+    ].filter(({ s }) => s && s.id && SELL_PRICES[s.id]);
+
+    if (allSlots.length === 0) {
+      const msg = document.createElement('p');
+      msg.style.cssText = 'color:#888;text-align:center;padding:20px 0';
+      msg.textContent = 'Nothing to sell. Mine or craft items first.';
+      grid.appendChild(msg);
+      return;
+    }
+
+    for (const { s, src, i } of allSlots) {
+      const sellPrice = SELL_PRICES[s.id] || 1;
+      const card = document.createElement('div');
+      card.className = 'shop-item-card';
+
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 32;
+      drawIcon(canvas, s.id, s.count);
+      card.appendChild(canvas);
+
+      const lbl = document.createElement('span');
+      lbl.className = 'shop-item-label';
+      lbl.textContent = `${getItemName(s.id)} ×${s.count}`;
+      card.appendChild(lbl);
+
+      const price = document.createElement('span');
+      price.className = 'shop-item-price';
+      price.textContent = `${sellPrice * s.count} coin${sellPrice * s.count !== 1 ? 's' : ''}`;
+      card.appendChild(price);
+
+      const btn = document.createElement('button');
+      btn.className = 'shop-buy-btn';
+      btn.textContent = 'Sell All';
+      btn.addEventListener('click', () => {
+        const arr = src === 'hotbar' ? player.hotbar : player.inventory;
+        const stack = arr[i];
+        if (!stack) return;
+        const total = sellPrice * stack.count;
+        arr[i] = null;
+        player.addItem(GOLD_COIN, total);
+        document.getElementById('shop-status').textContent =
+          `Sold ${getItemName(s.id)} ×${stack.count} for ${total} coins`;
+        this._refreshShop();
+      });
+      card.appendChild(btn);
       grid.appendChild(card);
     }
   }
@@ -627,6 +776,7 @@ export class UI {
     document.getElementById('shop-screen').classList.add('hidden');
     this._shopPlayer = null;
     this._shopNPC    = null;
+    this._shopMode   = 'buy';
   }
 }
 

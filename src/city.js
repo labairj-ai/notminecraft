@@ -106,14 +106,17 @@ export function getCityColumn(localX, localZ, density, citySeed) {
     B.CONCRETE, B.BRICK, B.STONE, B.PLANKS,
     B.COBBLESTONE, B.GLASS, B.SAND, B.MOSSY_COBBLE,
   ];
-  const styleIdx     = Math.floor(pr() * WALL_MATERIALS.length);
-  const wallBlock    = WALL_MATERIALS[styleIdx];
+  const styleIdx      = Math.floor(pr() * WALL_MATERIALS.length);
+  const wallBlock     = WALL_MATERIALS[styleIdx];
   const glassExterior = (styleIdx === 5); // all-glass tower
-  const wallAxisX    = pr() > 0.5;        // interior partition direction (X or Z axis)
+  const wallAxisX     = pr() > 0.5;      // interior partition direction (X or Z axis)
+
+  const BUILDING_TYPES = ['residential', 'commercial', 'office', 'restaurant'];
+  const buildingType  = BUILDING_TYPES[Math.floor(pr() * BUILDING_TYPES.length)];
 
   return {
     type: 'building', height, floors, isPerimeter, isCorner, isDoor, inX, inZ,
-    wallBlock, glassExterior, wallAxisX,
+    wallBlock, glassExterior, wallAxisX, buildingType,
   };
 }
 
@@ -221,6 +224,54 @@ export function getChunkCarSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
       heading,
       seed: Math.floor(worldSeed + wx * 5003 + wz * 7411 + i),
     });
+  }
+
+  return spawns;
+}
+
+// ── Public: shopkeeper spawn points for a chunk ───────────────────────────────
+// Spawns one dedicated NPC per commercial/restaurant/office/residential building
+export function getChunkShopkeeperSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
+  const SIZE = 16;
+  const spawns = [];
+  const seen   = new Set();
+
+  for (let lx = 0; lx < SIZE; lx++) {
+    for (let lz = 0; lz < SIZE; lz++) {
+      const wx = chunkX * SIZE + lx;
+      const wz = chunkZ * SIZE + lz;
+      const city = cityInfoFn(wx, wz);
+      if (!city) continue;
+
+      const col = getCityColumn(city.localX, city.localZ, city.density, city.seed);
+      if (col.type !== 'building' || col.isPerimeter) continue;
+
+      // Place shopkeeper at (inX=6, inZ=4) — in front of the main counter area
+      if (col.inX !== 6 || col.inZ !== 4) continue;
+
+      const key = `shop:${wx},${wz}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      let role;
+      switch (col.buildingType) {
+        case 'commercial':  role = 'shopkeeper';    break;
+        case 'restaurant':  role = 'chef';          break;
+        case 'office':      role = 'office_worker'; break;
+        case 'residential': role = 'researcher';    break;
+        default:            role = 'shopkeeper';    break;
+      }
+
+      spawns.push({
+        wx: wx + 0.5,
+        wy: CITY_BASE_Y + 1,
+        wz: wz + 0.5,
+        type: 'shopkeeper',
+        role,
+        wander: false,
+        seed: Math.floor(worldSeed + wx * 5113 + wz * 7919),
+      });
+    }
   }
 
   return spawns;

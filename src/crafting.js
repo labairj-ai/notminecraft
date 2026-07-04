@@ -13,7 +13,9 @@
 import {
   WOOD, PLANKS, COBBLESTONE, STONE, SAND, GRAVEL, CRAFTING, FURNACE, LEAVES,
   WOOL, TORCH, CHEST, BED, GLASS, BRICK, MOSSY_COBBLE, CONCRETE, ASPHALT,
-  DOOR_CLOSED, SIDEWALK, CLAY,
+  DOOR_CLOSED, SIDEWALK, CLAY, IRON_ORE, GLOWSTONE,
+  CHAIR, TABLE, LAMP, COUNTER, DESK, TV, STOOL, FILING_CABINET, ESCALATOR_UP,
+  IRON_INGOT, STEEL_INGOT, VEHICLE,
   STICK, COAL, TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_SWORD, TOOL_HOE,
 } from './blocks.js';
 
@@ -148,6 +150,81 @@ export const RECIPES = [
   // Door: 6 planks in 2×3 pattern (3×3 table) → 1 door
   { size: 3, rows: [[P, P], [P, P], [P, P]],
     result: { id: DOOR_CLOSED, count: 1 } },
+
+  // ── Raw materials ─────────────────────────────────────────────────────────
+
+  // Iron ingot: 1 iron ore → 1 iron ingot (simplified smelting, shapeless)
+  { size: 2, shapeless: true, ingredients: [IRON_ORE],
+    result: { id: IRON_INGOT, count: 1 } },
+
+  // Steel ingot: 2 iron ingots + 1 coal → 2 steel ingots
+  { size: 2, shapeless: true, ingredients: [IRON_INGOT, IRON_INGOT, COAL],
+    result: { id: STEEL_INGOT, count: 2 } },
+
+  // ── Furniture ─────────────────────────────────────────────────────────────
+
+  // Chair: 3 planks + 2 sticks (shaped 3×3 table)
+  //    P
+  //  P P
+  //  S S
+  { size: 3, rows: [[P, null], [P, P], [S, S]],
+    result: { id: CHAIR, count: 1 } },
+
+  // Table: 3 planks top, 2 sticks legs
+  //  P P P
+  //    S
+  //    S
+  { size: 3, rows: [[P, P, P], [null, S, null], [null, S, null]],
+    result: { id: TABLE, count: 2 } },
+
+  // Lamp: glowstone + glass (shapeless 2×2)
+  { size: 2, shapeless: true, ingredients: [GLOWSTONE, GLASS],
+    result: { id: LAMP, count: 1 } },
+
+  // Counter: stone top + planks base (shaped 3×3)
+  //  S S S
+  //  P P P
+  { size: 3, rows: [[STONE, STONE, STONE], [P, P, P]],
+    result: { id: COUNTER, count: 3 } },
+
+  // Desk: planks top + iron ingot legs
+  //  P P P
+  //  I   I
+  { size: 3, rows: [[P, P, P], [IRON_INGOT, null, IRON_INGOT]],
+    result: { id: DESK, count: 2 } },
+
+  // TV: iron frame + glass screen + coal/power (shaped 3×3)
+  //  I I I
+  //  I G I
+  //  I C I
+  { size: 3, rows: [[IRON_INGOT, IRON_INGOT, IRON_INGOT], [IRON_INGOT, GLASS, IRON_INGOT], [IRON_INGOT, COAL, IRON_INGOT]],
+    result: { id: TV, count: 1 } },
+
+  // Stool: plank + 2 sticks (simple)
+  //    P
+  //    S
+  //  S
+  { size: 3, rows: [[null, P, null], [null, S, null], [S, null, null]],
+    result: { id: STOOL, count: 1 } },
+
+  // Filing cabinet: 4 iron ingots + 2 planks
+  //  I P
+  //  I P
+  { size: 2, rows: [[IRON_INGOT, P], [IRON_INGOT, P]],
+    result: { id: FILING_CABINET, count: 1 } },
+
+  // ── Vehicle crafting chain ─────────────────────────────────────────────────
+
+  // Vehicle: 4 steel ingots + 2 iron ingots + 1 glass (3×3 shapeless)
+  { size: 3, shapeless: true,
+    ingredients: [STEEL_INGOT, STEEL_INGOT, STEEL_INGOT, STEEL_INGOT, IRON_INGOT, IRON_INGOT, GLASS],
+    result: { id: VEHICLE, count: 1 } },
+
+  // Escalator: 2 iron ingots + 2 glowstone in 2×2 → 4 escalator blocks
+  //  I G
+  //  G I
+  { size: 2, rows: [[IRON_INGOT, GLOWSTONE], [GLOWSTONE, IRON_INGOT]],
+    result: { id: ESCALATOR_UP, count: 4 } },
 ];
 
 // ── Recipe matcher ─────────────────────────────────────────────────────────────

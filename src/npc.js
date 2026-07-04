@@ -4,6 +4,7 @@ import {
   TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_SWORD, TOOL_HOE,
   STICK, COAL, WOOL,
 } from './blocks.js';
+import { getTreeForRole } from './dialogue.js';
 
 // ── Outfits ───────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,12 @@ const OUTFITS = {
     { shirt:'#34d399', pants:'#ecfdf5', skin:'#d4a070', hair:'#111',    hat:'#6ee7b7' },
     { shirt:'#60a5fa', pants:'#eff6ff', skin:'#fbd0b8', hair:'#92400e', hat:'#bfdbfe' },
     { shirt:'#fb923c', pants:'#fff7ed', skin:'#8b6248', hair:'#1a0a00', hat:'#fed7aa' },
+  ],
+  shopkeeper: [
+    { shirt:'#6d28d9', pants:'#1f2937', skin:'#f0c898', hair:'#3b1f00', hat:null },
+    { shirt:'#7c3aed', pants:'#111827', skin:'#d4a070', hair:'#1a0a00', hat:null },
+    { shirt:'#5b21b6', pants:'#1f2937', skin:'#8b6248', hair:'#222',    hat:null },
+    { shirt:'#4c1d95', pants:'#0f172a', skin:'#fbd0b8', hair:'#555',    hat:null },
   ],
 };
 
@@ -157,6 +164,29 @@ const SHOP_NAMES = [
   "East Side Hardware", "Corner Supply", "Downtown Depot",
 ];
 
+// Sell prices (what NPCs pay for player items): roughly half buy price
+export const SELL_PRICES = {};
+for (const inv of Object.values(SHOP_INVENTORIES)) {
+  for (const item of inv) {
+    if (!SELL_PRICES[item.id]) SELL_PRICES[item.id] = Math.max(1, Math.floor(item.price / 2));
+  }
+}
+// Raw mined materials
+SELL_PRICES[COAL]        = 1;
+SELL_PRICES[STONE]       = 1;
+SELL_PRICES[COBBLESTONE] = 1;
+SELL_PRICES[PLANKS]      = 1;
+SELL_PRICES[GLASS]       = 2;
+SELL_PRICES[CONCRETE]    = 1;
+SELL_PRICES[WOOL]        = 1;
+SELL_PRICES[BED]         = 6;
+SELL_PRICES[CHEST]       = 8;
+
+const CHEF_NAMES = ['Chef Romano','Chef Lin','Chef Okafor','Chef Santos','Chef Müller'];
+const RESEARCHER_NAMES = [
+  'Dr. Chen','Dr. Patel','Dr. Nguyen','Dr. Andersen','Prof. Rivera',
+];
+
 const FIRST_NAMES = ['Alex','Sam','Jordan','Taylor','Morgan','Casey','Riley',
                      'Drew','Blake','Quinn','Lee','Skyler','Avery','Reese',
                      'Jamie','Cameron','Sage','River','Finley','Emery'];
@@ -174,16 +204,17 @@ function srng(seed) {
   return () => { s = ((s * 1664525 + 1013904223) >>> 0); return s / 0xffffffff; };
 }
 
-const HP_TABLE = { merchant: 3, citizen: 3, builder: 4, police: 6, businessperson: 3, tourist: 2 };
+const HP_TABLE = { merchant: 3, citizen: 3, builder: 4, police: 6, businessperson: 3, tourist: 2, shopkeeper: 3 };
 
 // ── NPC class ─────────────────────────────────────────────────────────────────
 
 class NPC {
-  constructor(scene, world, { wx, wy, wz, type, seed, wander = false }) {
+  constructor(scene, world, { wx, wy, wz, type, role, seed, wander = false }) {
     this.homePos = new THREE.Vector3(wx, wy, wz);
     this.pos     = new THREE.Vector3(wx, wy, wz); // tracks rendered position
     this.type    = type;
-    this.wander  = wander && type !== 'merchant'; // merchants never wander
+    this.role    = role || null;
+    this.wander  = wander && type !== 'merchant' && type !== 'shopkeeper';
     this._world  = world;
     this.hp      = HP_TABLE[type] ?? 3;
     this._hitFlash   = 0;
@@ -201,6 +232,26 @@ class NPC {
       const types   = Object.keys(SHOP_INVENTORIES);
       this.shopType = types[Math.floor(r() * types.length)];
       this.wares    = SHOP_INVENTORIES[this.shopType];
+    } else if (type === 'shopkeeper') {
+      // Dedicated building worker with branching conversation tree
+      this.conversationTree = getTreeForRole(role);
+      if (role === 'chef') {
+        this.name = CHEF_NAMES[Math.floor(r() * CHEF_NAMES.length)];
+        // Chefs can sell via their tough conversation path
+        const types = Object.keys(SHOP_INVENTORIES);
+        this.shopType = types[Math.floor(r() * types.length)];
+        this.wares    = SHOP_INVENTORIES[this.shopType];
+      } else if (role === 'office_worker') {
+        this.name = `${first} ${last}`;
+      } else if (role === 'researcher') {
+        this.name = RESEARCHER_NAMES[Math.floor(r() * RESEARCHER_NAMES.length)];
+      } else {
+        // Default shopkeeper
+        this.name = SHOP_NAMES[Math.floor(r() * SHOP_NAMES.length)];
+        const types = Object.keys(SHOP_INVENTORIES);
+        this.shopType = types[Math.floor(r() * types.length)];
+        this.wares    = SHOP_INVENTORIES[this.shopType];
+      }
     } else if (type === 'police') {
       this.name = `Officer ${last}`;
     } else if (type === 'builder') {

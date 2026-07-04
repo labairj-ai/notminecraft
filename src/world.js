@@ -3,9 +3,10 @@ import { createNoise2D, createNoise3D } from 'simplex-noise';
 import { Chunk } from './chunk.js';
 import { createAtlas } from './textures.js';
 import { CHUNK_SIZE, CHUNK_HEIGHT, SEA_LEVEL } from './terrain.js';
-import { getCityInfo, getChunkNPCSpawns, getChunkCarSpawns } from './city.js';
+import { getCityInfo, getChunkNPCSpawns, getChunkCarSpawns, getChunkShopkeeperSpawns } from './city.js';
 import { NPCManager } from './npc.js';
 import { CarManager } from './car.js';
+import { TrafficManager, getChunkTrafficSpawns } from './traffic.js';
 import * as B from './blocks.js';
 
 const RENDER_DIST = 7;
@@ -41,8 +42,9 @@ export class World {
     });
 
     this._pendingBuilds = [];
-    this.npcs = new NPCManager(scene, this);
-    this.cars = new CarManager(scene);
+    this.npcs    = new NPCManager(scene, this);
+    this.cars    = new CarManager(scene);
+    this.traffic = new TrafficManager(scene);
   }
 
   cityInfo(wx, wz) { return getCityInfo(wx, wz, this.seed); }
@@ -117,6 +119,12 @@ export class World {
           const carSpawns = getChunkCarSpawns(cx, cz, this.seed,
             (wx, wz) => this.cityInfo(wx, wz));
           this.cars.spawnForChunk(k, carSpawns);
+          const trafficSpawns = getChunkTrafficSpawns(cx, cz, this.seed,
+            (wx, wz) => this.cityInfo(wx, wz));
+          this.traffic.spawnForChunk(k, trafficSpawns);
+          const shopSpawns = getChunkShopkeeperSpawns(cx, cz, this.seed,
+            (wx, wz) => this.cityInfo(wx, wz));
+          this.npcs.spawnForChunk(k + ':shop', shopSpawns);
         }
       }
     }
@@ -127,7 +135,9 @@ export class World {
       const dz = chunk.cz - pcz;
       if (dx*dx + dz*dz > (RENDER_DIST + 2) * (RENDER_DIST + 2)) {
         this.npcs.despawnChunk(k);
+        this.npcs.despawnChunk(k + ':shop');
         this.cars.despawnChunk(k);
+        this.traffic.despawnChunk(k);
         chunk.dispose();
         this.chunks.delete(k);
       }

@@ -480,6 +480,139 @@ export function createAtlas() {
   hLine(ctx, 13, 2, 5,  'rgba(100,115,135,0.5)');
   hLine(ctx, 13, 2, 10, 'rgba(100,115,135,0.5)');
 
+  // ── ROW 3 — Furniture ──────────────────────────────────────────────────────
+
+  // [0,3] chair (wood seat with legs)
+  fill(ctx, 0, 3, '#c8a264');
+  noise(ctx, 0, 3, ['#d4ac70','#bc9858'], 0.2, 300);
+  // seat surface (top half)
+  ctx.fillStyle = '#8B6030';
+  ctx.fillRect(0*TEX_SIZE+2, 3*TEX_SIZE+2, 12, 8);
+  // leg lines (bottom half)
+  ctx.fillStyle = '#6b4820';
+  ctx.fillRect(0*TEX_SIZE+2,  3*TEX_SIZE+10, 2, 5);
+  ctx.fillRect(0*TEX_SIZE+12, 3*TEX_SIZE+10, 2, 5);
+  // backrest
+  ctx.fillStyle = '#a07030';
+  ctx.fillRect(0*TEX_SIZE+2, 3*TEX_SIZE+1, 12, 2);
+
+  // [1,3] table (flat wood surface with visible edge)
+  fill(ctx, 1, 3, '#c8a264');
+  noise(ctx, 1, 3, ['#d4b870','#b89050'], 0.15, 310);
+  // table top surface panel
+  ctx.fillStyle = '#8B6030';
+  hLine(ctx, 1, 3, 0,  '#7a5220');
+  hLine(ctx, 1, 3, 4,  '#7a5220');
+  hLine(ctx, 1, 3, 15, '#7a5220');
+  // leg indicators at corners
+  ctx.fillStyle = '#6b4820';
+  ctx.fillRect(1*TEX_SIZE+0,  3*TEX_SIZE+5, 2, 10);
+  ctx.fillRect(1*TEX_SIZE+14, 3*TEX_SIZE+5, 2, 10);
+
+  // [2,3] lamp (bright amber emissive glow)
+  fill(ctx, 2, 3, '#f0c040');
+  noise(ctx, 2, 3, ['#ffe060','#d8a020','#fff080'], 0.35, 320);
+  // bright core
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(2*TEX_SIZE+5, 3*TEX_SIZE+5, 6, 6);
+  ctx.fillStyle = '#fffbc0';
+  ctx.fillRect(2*TEX_SIZE+3, 3*TEX_SIZE+3, 10, 10);
+  // outer glow ring
+  ctx.strokeStyle = '#e8b030'; ctx.lineWidth = 1;
+  ctx.strokeRect(2*TEX_SIZE+1.5, 3*TEX_SIZE+1.5, 13, 13);
+
+  // [3,3] counter (stone top, wood sides)
+  fill(ctx, 3, 3, '#909090');
+  noise(ctx, 3, 3, ['#9a9a9a','#828282'], 0.2, 330);
+  // stone top strip
+  ctx.fillStyle = '#a8a8a8';
+  ctx.fillRect(3*TEX_SIZE, 3*TEX_SIZE, 16, 5);
+  hLine(ctx, 3, 3, 0, '#888');
+  hLine(ctx, 3, 3, 4, '#888');
+  // wood-colored body
+  ctx.fillStyle = '#b08840';
+  ctx.fillRect(3*TEX_SIZE, 3*TEX_SIZE+5, 16, 11);
+  noise(ctx, 3, 3, ['#c09850','#a07830'], 0.15, 331);
+
+  // [4,3] desk (darker plank surface with inset)
+  fill(ctx, 4, 3, '#a07030');
+  noise(ctx, 4, 3, ['#b08040','#906020'], 0.2, 340);
+  for (let y2 = 0; y2 < 16; y2 += 4) hLine(ctx, 4, 3, y2, '#7a5010');
+  // inset workspace area
+  ctx.fillStyle = '#b89050';
+  ctx.fillRect(4*TEX_SIZE+3, 3*TEX_SIZE+2, 10, 8);
+  // pen/item line
+  ctx.fillStyle = '#303030';
+  ctx.fillRect(4*TEX_SIZE+4, 3*TEX_SIZE+5, 5, 1);
+
+  // [5,3] TV (dark glass screen with glow edge)
+  fill(ctx, 5, 3, '#111111');
+  noise(ctx, 5, 3, ['#181818','#0a0a0a'], 0.2, 350);
+  // screen glow (slight blue tint on inner area)
+  ctx.fillStyle = 'rgba(30,80,200,0.35)';
+  ctx.fillRect(5*TEX_SIZE+2, 3*TEX_SIZE+2, 12, 10);
+  // screen frame
+  ctx.strokeStyle = '#333333'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(5*TEX_SIZE+1, 3*TEX_SIZE+1, 14, 12);
+  // stand/base
+  ctx.fillStyle = '#222222';
+  ctx.fillRect(5*TEX_SIZE+5, 3*TEX_SIZE+13, 6, 3);
+  // power LED
+  ctx.fillStyle = '#00ff88';
+  ctx.fillRect(5*TEX_SIZE+14, 3*TEX_SIZE+13, 1, 1);
+
+  // [6,3] stool (round top, single leg look)
+  fill(ctx, 6, 3, '#c8a264');
+  noise(ctx, 6, 3, ['#d4ac70','#bc9858'], 0.2, 360);
+  // round seat (circular suggestion)
+  ctx.fillStyle = '#8B5E3C';
+  ctx.beginPath();
+  ctx.arc(6*TEX_SIZE+8, 3*TEX_SIZE+7, 6, 0, Math.PI*2);
+  ctx.fill();
+  // center post
+  ctx.fillStyle = '#6b4820';
+  ctx.fillRect(6*TEX_SIZE+7, 3*TEX_SIZE+9, 2, 7);
+  // base ring
+  ctx.fillRect(6*TEX_SIZE+4, 3*TEX_SIZE+14, 8, 2);
+
+  // [7,3] filing cabinet (metal drawers)
+  fill(ctx, 7, 3, '#808080');
+  noise(ctx, 7, 3, ['#8a8a8a','#767676'], 0.15, 370);
+  // drawer dividers
+  hLine(ctx, 7, 3, 5,  '#555555');
+  hLine(ctx, 7, 3, 10, '#555555');
+  hLine(ctx, 7, 3, 0,  '#606060');
+  hLine(ctx, 7, 3, 15, '#606060');
+  // drawer handles (gold)
+  ctx.fillStyle = '#fbbf24';
+  ctx.fillRect(7*TEX_SIZE+6, 3*TEX_SIZE+2, 4, 2);
+  ctx.fillRect(7*TEX_SIZE+6, 3*TEX_SIZE+7, 4, 2);
+  ctx.fillRect(7*TEX_SIZE+6, 3*TEX_SIZE+12, 4, 2);
+
+  // [8,3] escalator (amber with diagonal stripes and up-arrow)
+  fill(ctx, 8, 3, '#d97706');
+  // diagonal warning stripes (black, 45°)
+  ctx.strokeStyle = '#1a1100';
+  ctx.lineWidth = 2;
+  for (let d = -16; d <= 32; d += 5) {
+    ctx.beginPath();
+    ctx.moveTo(8*TEX_SIZE + d,           3*TEX_SIZE);
+    ctx.lineTo(8*TEX_SIZE + d + TEX_SIZE, 3*TEX_SIZE + TEX_SIZE);
+    ctx.stroke();
+  }
+  // clip to tile
+  ctx.fillStyle = '#d97706';
+  ctx.fillRect(8*TEX_SIZE, 3*TEX_SIZE, 1, TEX_SIZE);
+  ctx.fillRect(8*TEX_SIZE + TEX_SIZE - 1, 3*TEX_SIZE, 1, TEX_SIZE);
+  ctx.fillRect(8*TEX_SIZE, 3*TEX_SIZE, TEX_SIZE, 1);
+  ctx.fillRect(8*TEX_SIZE, 3*TEX_SIZE + TEX_SIZE - 1, TEX_SIZE, 1);
+  // up-arrow (white)
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(8*TEX_SIZE+7, 3*TEX_SIZE+3, 2, 7); // shaft
+  ctx.fillRect(8*TEX_SIZE+4, 3*TEX_SIZE+6, 8, 2); // arrowhead row 1
+  ctx.fillRect(8*TEX_SIZE+5, 3*TEX_SIZE+4, 6, 2); // arrowhead row 2
+  ctx.fillRect(8*TEX_SIZE+6, 3*TEX_SIZE+2, 4, 2); // arrowhead row 3
+
   return canvas;
 }
 
