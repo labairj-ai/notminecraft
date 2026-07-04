@@ -1,18 +1,18 @@
 // ── City layout, NPC spawn, and car spawn ─────────────────────────────────────
 import * as B from './blocks.js';
 
-export const CITY_SPACING   = 600;
-export const CITY_RADIUS    = 220;
+export const CITY_SPACING   = 400;   // distance between village centres
+export const CITY_RADIUS    = 80;    // small village footprint
 export const CITY_BASE_Y    = 24;
-export const STREET_PERIOD  = 26;   // 3 sidewalk + 6 road + 3 sidewalk + 14 building
-export const ROAD_WIDTH     = 6;    // pure asphalt (fits 2 cars with padding)
-export const SIDEWALK_WIDTH = 3;    // pavement on each side of road
+export const STREET_PERIOD  = 26;    // 3 sidewalk + 6 road + 3 sidewalk + 14 building
+export const ROAD_WIDTH     = 6;
+export const SIDEWALK_WIDTH = 3;
 export const STREET_WIDTH   = ROAD_WIDTH + SIDEWALK_WIDTH * 2; // 12
-export const BUILDING_MAX   = STREET_PERIOD - STREET_WIDTH - 1; // 13 (far perimeter edge)
+export const BUILDING_MAX   = STREET_PERIOD - STREET_WIDTH - 1; // 13
 
-export const DOOR_WIDTH     = 2;    // 2-block-wide door opening
-export const DOOR_START     = 6;    // left edge of door in 0–13 wall (centred)
-export const DOOR_HEIGHT    = 3;    // air from relY=1 to relY=3 (3 blocks tall)
+export const DOOR_WIDTH  = 2;
+export const DOOR_START  = 6;
+export const DOOR_HEIGHT = 3;
 
 function srng(seed) {
   let s = ((seed * 1664525 + 1013904223) >>> 0);
@@ -51,32 +51,32 @@ export function getCityInfo(wx, wz, worldSeed) {
   return null;
 }
 
-// ── Public: per-column layout ─────────────────────────────────────────────────
+// ── Public: per-column layout ──────────────────────────────────────────────────
 //
 // Returns:
-//   { type:'road' }
-//   { type:'building', height, floors, isPerimeter, isCorner, isDoor, inX, inZ }
+//   { type:'road', isSidewalk }
+//   { type:'park', inX, inZ }
+//   { type:'building', height, floors, isPerimeter, isCorner, isDoor, inX, inZ,
+//     wallBlock, glassExterior, wallAxisX, buildingType }
 export function getCityColumn(localX, localZ, density, citySeed) {
-  // Floor to integer block coords — localX/localZ are floats due to jitter.
   const px = mod(Math.floor(localX), STREET_PERIOD);
   const pz = mod(Math.floor(localZ), STREET_PERIOD);
 
   if (px < STREET_WIDTH || pz < STREET_WIDTH) {
-    // Within street zone — determine sidewalk vs. road lane
     const xSide = px < STREET_WIDTH && (px < SIDEWALK_WIDTH || px >= STREET_WIDTH - SIDEWALK_WIDTH);
     const zSide = pz < STREET_WIDTH && (pz < SIDEWALK_WIDTH || pz >= STREET_WIDTH - SIDEWALK_WIDTH);
     let isSidewalk;
     if (px < STREET_WIDTH && pz >= STREET_WIDTH) {
-      isSidewalk = xSide;           // pure Z-corridor
+      isSidewalk = xSide;
     } else if (pz < STREET_WIDTH && px >= STREET_WIDTH) {
-      isSidewalk = zSide;           // pure X-corridor
+      isSidewalk = zSide;
     } else {
-      isSidewalk = xSide && zSide;  // intersection: only true corners are sidewalk
+      isSidewalk = xSide && zSide;
     }
     return { type: 'road', isSidewalk };
   }
 
-  const inX = px - STREET_WIDTH; // 0–BUILDING_MAX
+  const inX = px - STREET_WIDTH;
   const inZ = pz - STREET_WIDTH;
   const BM = BUILDING_MAX;
   const isPerimeter = inX === 0 || inX === BM || inZ === 0 || inZ === BM;
@@ -85,34 +85,54 @@ export function getCityColumn(localX, localZ, density, citySeed) {
   const plotX = Math.floor(localX / STREET_PERIOD);
   const plotZ = Math.floor(localZ / STREET_PERIOD);
   const pr = srng(citySeed * 99991 + plotX * 73856 + plotZ * 19349);
-  const minFloors = Math.max(1, Math.round(density * 8));
-  const floors    = minFloors + Math.floor(pr() * 6);
-  const height    = floors * 3;
 
-  // One door per building face: doorWall 0=front(inZ=0), 1=right(inX=BM), 2=back(inZ=BM), 3=left(inX=0)
+  // 25% of plots are parks / open green space
+  if (pr() < 0.25) {
+    return { type: 'park', inX, inZ };
+  }
+
+  // Building type — weighted toward the everyday buildings
+  const BUILDING_TYPES = [
+    'residential', 'residential', 'residential',
+    'commercial',  'commercial',
+    'restaurant',  'restaurant',
+    'police',
+    'fire_station',
+    'community_center',
+  ];
+  const buildingType = BUILDING_TYPES[Math.floor(pr() * BUILDING_TYPES.length)];
+
+  // Small-town scale: 1–2 floors only
+  const floors = 1 + Math.floor(pr() * 2);
+  const height = floors * 3;
+
+  // Door placement
   const doorWall = Math.floor(pr() * 4);
   let isDoor = false;
   if (isPerimeter && !isCorner) {
-    const d0 = DOOR_START;
-    const d1 = DOOR_START + DOOR_WIDTH - 1;
+    const d0 = DOOR_START, d1 = DOOR_START + DOOR_WIDTH - 1;
     if (doorWall === 0 && inZ === 0  && inX >= d0 && inX <= d1) isDoor = true;
     if (doorWall === 1 && inX === BM && inZ >= d0 && inZ <= d1) isDoor = true;
     if (doorWall === 2 && inZ === BM && inX >= d0 && inX <= d1) isDoor = true;
     if (doorWall === 3 && inX === 0  && inZ >= d0 && inZ <= d1) isDoor = true;
   }
 
-  // ── Building style (exterior material + interior layout) ─────────────────────
-  const WALL_MATERIALS = [
-    B.CONCRETE, B.BRICK, B.STONE, B.PLANKS,
-    B.COBBLESTONE, B.GLASS, B.SAND, B.MOSSY_COBBLE,
-  ];
-  const styleIdx      = Math.floor(pr() * WALL_MATERIALS.length);
-  const wallBlock     = WALL_MATERIALS[styleIdx];
-  const glassExterior = (styleIdx === 5); // all-glass tower
-  const wallAxisX     = pr() > 0.5;      // interior partition direction (X or Z axis)
+  // Wall material — themed per type; always consume one RNG value
+  const wallRoll = pr();
+  let wallBlock, glassExterior = false;
+  switch (buildingType) {
+    case 'police':          wallBlock = B.BRICK;        break;
+    case 'fire_station':    wallBlock = B.COBBLESTONE;  break;
+    case 'community_center': wallBlock = B.STONE;       break;
+    default: {
+      const WALL_MATS = [B.CONCRETE, B.BRICK, B.STONE, B.PLANKS, B.COBBLESTONE, B.GLASS];
+      const si = Math.floor(wallRoll * WALL_MATS.length);
+      wallBlock = WALL_MATS[si];
+      glassExterior = si === 5;
+    }
+  }
 
-  const BUILDING_TYPES = ['residential', 'commercial', 'office', 'restaurant'];
-  const buildingType  = BUILDING_TYPES[Math.floor(pr() * BUILDING_TYPES.length)];
+  const wallAxisX = pr() > 0.5;
 
   return {
     type: 'building', height, floors, isPerimeter, isCorner, isDoor, inX, inZ,
@@ -126,7 +146,7 @@ export function getChunkNPCSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
   const spawns = [];
   const seen   = new Set();
 
-  // Pass 1: door-adjacent NPCs (merchants, builders, businesspeople)
+  // Pass 1: door-adjacent NPCs — type matched to building
   for (const [lx, lz] of [[2,2],[2,10],[10,2],[10,10],[6,6],[6,2],[2,6],[10,6],[6,10]]) {
     const wx = chunkX * SIZE + lx;
     const wz = chunkZ * SIZE + lz;
@@ -142,7 +162,14 @@ export function getChunkNPCSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
 
     const r = srng(worldSeed + wx * 4999 + wz * 7691);
     const t = r();
-    const type = t < 0.5 ? 'merchant' : t < 0.75 ? 'builder' : 'businessperson';
+    let type;
+    switch (col.buildingType) {
+      case 'police':       type = 'police';        break;
+      case 'fire_station': type = 'builder';       break;
+      case 'restaurant':   type = 'merchant';      break;
+      default:
+        type = t < 0.5 ? 'merchant' : t < 0.75 ? 'builder' : 'businessperson';
+    }
     spawns.push({
       wx: wx + 0.5, wy: CITY_BASE_Y + 1, wz: wz + 0.5,
       type, wander: false,
@@ -150,9 +177,9 @@ export function getChunkNPCSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
     });
   }
 
-  // Pass 2: street pedestrians (citizens, police, tourists)
+  // Pass 2: street pedestrians
   const pr = srng(worldSeed * 7 + chunkX * 9431 + chunkZ * 6271);
-  const count = Math.floor(pr() * 3); // 0–2 per chunk
+  const count = Math.floor(pr() * 3);
   for (let i = 0; i < count; i++) {
     const lx = Math.floor(pr() * SIZE);
     const lz = Math.floor(pr() * SIZE);
@@ -188,7 +215,7 @@ export function getChunkCarSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
   const seen   = new Set();
 
   const pr = srng(worldSeed * 13 + chunkX * 6571 + chunkZ * 8831);
-  const count = Math.floor(pr() * 2.5); // 0–2 cars per chunk
+  const count = Math.floor(pr() * 2.5);
 
   for (let i = 0; i < count; i++) {
     const lx = Math.floor(pr() * SIZE);
@@ -205,21 +232,20 @@ export function getChunkCarSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
     if (seen.has(key)) continue;
     seen.add(key);
 
-    // Road orientation → car heading
     const ippx = mod(Math.floor(city.localX), STREET_PERIOD);
     const ippz = mod(Math.floor(city.localZ), STREET_PERIOD);
     let heading;
     if (ippx < STREET_WIDTH && ippz >= STREET_WIDTH) {
-      heading = pr() < 0.5 ? 0 : Math.PI;          // Z-aligned road
+      heading = pr() < 0.5 ? 0 : Math.PI;
     } else if (ippz < STREET_WIDTH && ippx >= STREET_WIDTH) {
-      heading = pr() < 0.5 ? Math.PI / 2 : -Math.PI / 2; // X-aligned road
+      heading = pr() < 0.5 ? Math.PI / 2 : -Math.PI / 2;
     } else {
-      heading = Math.floor(pr() * 4) * Math.PI / 2; // intersection
+      heading = Math.floor(pr() * 4) * Math.PI / 2;
     }
 
     spawns.push({
       wx: wx + 0.5,
-      wy: CITY_BASE_Y + 1.26,  // just above road surface (ASPHALT top face = y=25)
+      wy: CITY_BASE_Y + 1.26,
       wz: wz + 0.5,
       heading,
       seed: Math.floor(worldSeed + wx * 5003 + wz * 7411 + i),
@@ -230,7 +256,6 @@ export function getChunkCarSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
 }
 
 // ── Public: shopkeeper spawn points for a chunk ───────────────────────────────
-// Spawns one dedicated NPC per commercial/restaurant/office/residential building
 export function getChunkShopkeeperSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
   const SIZE = 16;
   const spawns = [];
@@ -246,7 +271,6 @@ export function getChunkShopkeeperSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) 
       const col = getCityColumn(city.localX, city.localZ, city.density, city.seed);
       if (col.type !== 'building' || col.isPerimeter) continue;
 
-      // Place shopkeeper at (inX=6, inZ=4) — in front of the main counter area
       if (col.inX !== 6 || col.inZ !== 4) continue;
 
       const key = `shop:${wx},${wz}`;
@@ -255,11 +279,13 @@ export function getChunkShopkeeperSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) 
 
       let role;
       switch (col.buildingType) {
-        case 'commercial':  role = 'shopkeeper';    break;
-        case 'restaurant':  role = 'chef';          break;
-        case 'office':      role = 'office_worker'; break;
-        case 'residential': role = 'researcher';    break;
-        default:            role = 'shopkeeper';    break;
+        case 'commercial':      role = 'shopkeeper';    break;
+        case 'restaurant':      role = 'chef';          break;
+        case 'police':          role = 'police';        break;
+        case 'fire_station':    role = 'builder';       break;
+        case 'community_center': role = 'researcher';  break;
+        case 'residential':     role = 'researcher';   break;
+        default:                role = 'shopkeeper';    break;
       }
 
       spawns.push({

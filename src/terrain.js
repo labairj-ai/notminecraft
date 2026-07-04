@@ -2,19 +2,18 @@ import * as B from './blocks.js';
 import { getCityInfo, getCityColumn, CITY_BASE_Y, DOOR_HEIGHT } from './city.js';
 
 // Returns the block to place at a given interior cell above the floor slab.
-// inX/inZ: 1-12 (interior coords within building), floorNum: 0=ground, 1+
-// blockInFlr: 1 or 2 (position within the 3-block floor period, 0=slab itself)
-// buildingType: 'residential'|'commercial'|'office'|'restaurant'
+// inX/inZ: 1-12, floorNum: 0=ground, 1+
+// blockInFlr: 1 or 2 (0=slab handled separately)
 function interiorBlock(inX, inZ, floorNum, blockInFlr, wallAxisX, buildingType) {
   // Escalator column — shaft air; floor tiles placed at blockInFlr=0 level
   if (inX === 2 && inZ === 2) return B.AIR;
   // Step-off shaft — kept clear so players can drop down
   if (inX === 3 && inZ === 2) return B.AIR;
 
-  // Partition wall divides building into two rooms (3-block passage at centre)
+  // Partition wall divides building into two rooms (open-plan types skip it)
   const isPartCol = wallAxisX ? (inX === 7) : (inZ === 7);
   const inPassage = wallAxisX ? (inZ >= 5 && inZ <= 7) : (inX >= 5 && inX <= 7);
-  if (isPartCol && !inPassage) return B.PLANKS;
+  if (isPartCol && !inPassage && buildingType !== 'fire_station') return B.PLANKS;
 
   // Only place furniture at blockInFlr === 1 (just above floor slab)
   if (blockInFlr !== 1) return B.AIR;
@@ -75,11 +74,47 @@ function interiorBlock(inX, inZ, floorNum, blockInFlr, wallAxisX, buildingType) 
     default:
       if (inX === 1  && inZ === 12) return B.BOOKSHELF;
       if (inX === 12 && inZ === 1)  return B.CRAFTING;
-      // Shop counter along back
       if (inZ <= 3 && inX >= 2 && inX <= 11) return B.COUNTER;
-      // Display chests
       if (inZ >= 5 && inZ <= 9 && inX >= 3 && inX <= 10 && inX % 4 === 3 && inZ % 4 === 1) return B.CHEST;
       if (inX === 3 && inZ === 11) return B.LAMP;
+      return B.AIR;
+
+    case 'police':
+      // Front reception counter
+      if (inZ <= 3 && inX >= 2 && inX <= 11) return B.COUNTER;
+      // Officer desks and chairs
+      if (inZ >= 5 && inZ <= 9 && inX % 3 === 2 && inX >= 2 && inX <= 11) return B.DESK;
+      if (inZ >= 5 && inZ <= 9 && inX % 3 === 0 && inX >= 2 && inX <= 11) return B.CHAIR;
+      // Filing cabinets and monitor along side wall
+      if (inX === 11 && inZ >= 5 && inZ <= 9 && inZ % 2 === 1) return B.FILING_CABINET;
+      if (inX === 11 && inZ === 4) return B.TV;
+      if (inX === 4  && inZ === 11) return B.LAMP;
+      if (inX === 9  && inZ === 11) return B.LAMP;
+      return B.AIR;
+
+    case 'fire_station':
+      // Open vehicle bay (centre columns stay clear)
+      if (inX >= 4 && inX <= 9) return B.AIR;
+      // Equipment counters along side walls
+      if (inZ >= 2 && inZ <= 8) return B.COUNTER;
+      // Back desk
+      if (inZ >= 10 && inX >= 5 && inX <= 8) return B.DESK;
+      if (inX === 2  && inZ === 10) return B.LAMP;
+      if (inX === 11 && inZ === 10) return B.LAMP;
+      return B.AIR;
+
+    case 'community_center':
+      if (inX === 1  && inZ === 12) return B.BOOKSHELF;
+      if (inX === 12 && inZ === 12) return B.BOOKSHELF;
+      // Reception counter
+      if (inZ === 2 && inX >= 4 && inX <= 9) return B.COUNTER;
+      // Meeting tables and chairs
+      if (inZ >= 5 && inZ <= 10 && inX >= 2 && inX <= 11) {
+        if (inX % 4 === 2 && inZ % 3 === 2) return B.TABLE;
+        if ((inX % 4 === 1 || inX % 4 === 3) && inZ % 3 === 2) return B.CHAIR;
+      }
+      if (inX === 3  && inZ === 11) return B.LAMP;
+      if (inX === 10 && inZ === 11) return B.LAMP;
       return B.AIR;
   }
 }
@@ -120,6 +155,19 @@ export function generateChunkData(chunkX, chunkZ, noise2D, noise3D, worldSeed = 
               data[idx] = (y === baseY) ? B.SIDEWALK : B.AIR;
             } else {
               data[idx] = (y === baseY) ? B.ASPHALT : B.AIR;
+            }
+            continue;
+          }
+
+          if (col.type === 'park') {
+            // y < baseY already handled above; everything at/above baseY is grass or air
+            if (y === baseY) {
+              data[idx] = B.GRASS;
+              // ~15% of park tiles get a tree
+              const pRng = ((city.seed * 77777 + wx * 12391 + wz * 87173) >>> 0) / 0xffffffff;
+              if (pRng < 0.15) treePositions.push({ lx, lz, surfY: baseY, snowy: false });
+            } else {
+              data[idx] = B.AIR;
             }
             continue;
           }
