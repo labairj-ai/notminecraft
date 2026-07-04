@@ -15,15 +15,16 @@ Open the URL shown in the terminal (usually `http://localhost:5175`).
 
 | Key | Action |
 |-----|--------|
-| WASD | Move |
+| WASD | Move / drive |
 | Mouse | Look |
 | Space | Jump / fly up |
 | Shift | Sprint / fly down |
 | Left Click | Break block |
 | Right Click | Place block / open door |
 | 1–9 / Scroll | Switch hotbar slot |
-| E | Open inventory / crafting |
-| F | Interact with NPC |
+| E | Enter nearby vehicle / open inventory |
+| E (in vehicle) | Exit vehicle |
+| F | Talk to NPC / view bus routes |
 | G | Toggle fly mode |
 | Esc | Pause menu |
 
@@ -38,52 +39,75 @@ Open the URL shown in the terminal (usually `http://localhost:5175`).
 - Dirt exposed to air gradually regrows into grass over ~8 seconds
 
 ### Minimap
-- Fortnite-style circular minimap in the top-right corner
-- Height-shaded terrain colours updated every 4 frames
-- Rotating player arrow at the centre
-- NPC dots (gold for shopkeepers, blue-white for citizens)
-- Compass rose (N/S/E/W) at the minimap edge
+- Circular minimap in the top-right corner with height-shaded terrain
+- Rotating player arrow, NPC dots, and compass rose (N/S/E/W)
 
 ### Blocks & Tools
 - 47+ block types including furniture and city infrastructure
 - Tool tiers: hand → iron → gold → diamond for pickaxe, axe, shovel, sword
-- Breaking grass drops **dirt** (grass and dirt are the same resource)
-- Coal drops from coal ore; crafting materials stack up to 64
-- Doors open and close as a single unit — right-click either half
+- Breaking grass drops **dirt** (grass and dirt share one resource)
+- Coal drops from coal ore; materials stack up to 64
+- Doors open and close as a single unit — right-click either half to toggle the whole door
 
 ### Crafting
-- 2×2 pocket crafting grid (E key)
-- 3×3 crafting table (right-click a Crafting Table block)
+- 2×2 pocket crafting grid (E key) and 3×3 crafting table (right-click a Crafting Table)
 - Bounding-box recipe matching — place recipes anywhere in the grid
 - Recipes: planks, sticks, all tool tiers, torches, chest, furnace, bed, furniture, vehicles, escalators, lanterns
 
-### Cities
-- Procedurally placed cities on a seeded ~600-block grid
-- Building types: commercial, restaurant, office, residential — each with distinct interior layouts
-- Multi-floor buildings with escalators flush with the floor that carry players upward
-- Concrete skyscrapers with glass windows, asphalt streets, sidewalks, traffic lights
+### Villages
+- Compact procedurally-placed villages (~160-block diameter, ~400 blocks apart)
+- **Building types** with themed interiors and wall materials:
+  - **Residential** — beds, kitchen counter, furnace, desks
+  - **Commercial (shop)** — display counter, chests, crafting table
+  - **Restaurant** — bar counter, stools, dining tables and chairs
+  - **Police station** (brick) — reception counter, officer desks, filing cabinets, monitor
+  - **Fire station** (cobblestone) — open vehicle bay, equipment counters
+  - **Community center** (stone) — reception, meeting tables, bookshelves
+- **Parks** — ~25% of plots are open grass spaces with scattered trees
+- Multi-floor buildings with flush amber escalator tiles that carry players upward
+- Asphalt roads, concrete sidewalks, traffic lights at intersections
+- Bus stops on village sidewalks (press F to view routes to other villages)
 
 ### NPCs & Dialogue
 - **Street NPCs**: merchants, citizens, builders, businesspeople, police, tourists
-- **Building workers**: shopkeepers, chefs, office workers, researchers — dedicated to their buildings and never leave
+- **Building workers**: shopkeepers, chefs, police officers, researchers — stay inside their buildings
 - NPCs stop wandering and face the player during conversation
 - Branching conversation trees with selectable options:
   - **Easy** (shopkeeper): friendly, leads directly to the shop
   - **Tough** (chef): confrontational haggling path
-  - **Dead-end** (office worker): dismissive, goes nowhere
+  - **Dead-end** (police/office): dismissive, goes nowhere
   - **Informative** (researcher): teaches biomes, resources, city mechanics, crafting tips
 
 ### Shops & Economy
-- Talk to a shopkeeper or merchant and navigate the dialogue to open the shop
+- Talk to a shopkeeper or merchant → navigate dialogue → open the shop
 - **Buy tab**: browse items with block-icon previews and gold coin prices
-- **Sell tab**: sell materials from your inventory for half the buy price
+- **Sell tab**: sell inventory items for half the buy price
 - Three shop inventories: hardware, tools, general goods
 - Gold Coins currency (start with 50)
 
-### Escalators
-- Amber glowing floor-level escalator tiles carry the player upward through multi-floor buildings
-- Walk onto the escalator to ride; step sideways off at any floor
-- Craftable: 2 iron ingots + 2 glowstone in a 2×2 grid → 4 escalator blocks
+### Vehicles
+Seven drivable vehicle types, each with a distinct 3D mesh and physics profile:
+
+| Type | Description | Top Speed |
+|------|-------------|-----------|
+| **Car** | Standard sedan | 18 |
+| **Truck** | Pickup with open cargo bed | 14 |
+| **Monster Truck** | Massive wheels, high suspension | 16 |
+| **Limo** | Extra-long, dark body, gold trim, 6 wheels | 22 |
+| **Motorcycle** | Slim 2-wheeler, handlebars, exhaust pipe | 28 |
+| **Bus** | Long yellow school-bus, 6 wheels | 10 |
+| **Dog Car** | Novelty — brown body, snout, boxy ears, tail | 18 |
+
+- AI traffic spawns a random mix of all types on city roads
+- Traffic lights, stop signs, and red-light stopping for AI vehicles
+- Press **E** near any vehicle to enter; **E** or **Esc** to exit
+- Craftable: place a vehicle recipe on an asphalt road surface
+
+### Bus Routes & Fast Travel
+- Bus stop shelters (posts + canopy + sign) appear on village sidewalks
+- Walk within 3 blocks of a stop and press **F** to open the route panel
+- Lists up to 4 nearby villages with direction and distance
+- Click a destination to teleport there instantly
 
 ### Animals
 - 11 animal types: sheep, cow, horse, dog, wolf, goat, rabbit, deer, frog, turtle, fish
@@ -97,11 +121,6 @@ Open the URL shown in the terminal (usually `http://localhost:5175`).
 - 9-slot hotbar + 18-slot main inventory
 - Stack management (up to 64 per slot for blocks/materials, 1 for tools)
 - Click-to-pick-up cursor dragging inside the inventory screen
-
-### Vehicles & Traffic
-- Craftable vehicles (4 steel + 2 iron + 1 glass)
-- City traffic system with AI cars on road lanes
-- Traffic lights at intersections
 
 ## Tech Stack
 
