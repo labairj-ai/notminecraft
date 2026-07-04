@@ -177,12 +177,21 @@ export function generateChunkData(chunkX, chunkZ, noise2D, noise3D, worldSeed = 
       const isForest = humidity > 0.2 && !isDesert;
 
       // Terrain height — continental + mountain layers
+      // Low-freq flatness mask: 0 = full mountains, 1 = flat plains
+      const flatNoise = noise2D(wx * 0.003 + 300, wz * 0.003 + 300);
+      const _ft = Math.max(0, Math.min(1, (flatNoise + 0.25) * 1.6));
+      const flatMask = _ft * _ft * (3 - 2 * _ft); // smoothstep 0→1
+
       const continent = noise2D(wx * 0.006, wz * 0.006);
       const hill      = noise2D(wx * 0.02,  wz * 0.02) * 0.5;
       const detail    = noise2D(wx * 0.06,  wz * 0.06) * 0.25;
       const mountain  = Math.max(0, noise2D(wx * 0.004 + 50, wz * 0.004 + 50));
 
-      const raw = continent + hill + detail + mountain * 0.8;
+      // In flat regions suppress hills, detail, and mountains completely
+      const raw = continent * lerp(1, 0.3, flatMask)
+                + hill      * (1 - flatMask * 0.92)
+                + detail    * (1 - flatMask * 0.88)
+                + mountain  * 0.8 * (1 - flatMask);
       const height = Math.floor(SEA_LEVEL + raw * 20);
       const surfY  = Math.max(1, Math.min(CHUNK_HEIGHT - 4, height));
 
