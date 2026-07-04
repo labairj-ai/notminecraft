@@ -152,9 +152,18 @@ export function createAtlas() {
   fill(ctx, 11, 0, '#222');
   noise(ctx, 11, 0, ['#333','#111','#444','#2a2a2a'], 0.5, 110);
 
-  // [12,0] snow
-  fill(ctx, 12, 0, '#eef4ff');
-  noise(ctx, 12, 0, ['#dde8f8','#f8fcff','#c8d8f0'], 0.2, 120);
+  // [12,0] snow — bright white with subtle blue-shadow dimples
+  fill(ctx, 12, 0, '#f4f8ff');
+  noise(ctx, 12, 0, ['#ffffff','#e8f0ff','#dce8fa','#f0f6ff'], 0.25, 120);
+  // small shadow pits for surface texture
+  { const r = rng(121);
+    for (let i = 0; i < 12; i++) {
+      const x = Math.floor(r() * 15); const y = Math.floor(r() * 15);
+      px(ctx, 12, 0, x,   y,   '#ccd8ee');
+      px(ctx, 12, 0, x+1, y,   '#e4eeff');
+      px(ctx, 12, 0, x,   y+1, '#e4eeff');
+    }
+  }
 
   // [13,0] glass (transparent window pane — used by GLASS block id=11)
   fill(ctx, 13, 0, 'rgba(185,228,248,0.17)'); // very transparent tint

@@ -392,6 +392,34 @@ document.getElementById('shop-close-btn').addEventListener('click', () => {
 
 // ── Dev helpers ───────────────────────────────────────────────────────────────
 window.__tp = (x, y, z) => { player.pos.set(x, y ?? 30, z); player.vel.set(0,0,0); };
+window.__world = () => world; // expose for console debugging
+window.__findSnow = () => {
+  for (const chunk of world.chunks.values()) {
+    if (!chunk.data) continue;
+    for (let lx = 0; lx < 16; lx++) for (let lz = 0; lz < 16; lz++) {
+      for (let y = 60; y >= 20; y--) {
+        if (chunk.getLocal(lx, y, lz) === 12) { // SNOW_BLOCK
+          const wx = chunk.cx*16+lx, wz = chunk.cz*16+lz;
+          window.__tp(wx, y+2, wz);
+          return `snow at ${wx},${y},${wz}`;
+        }
+      }
+    }
+  }
+  return 'no snow in loaded chunks';
+};
+window.__testGrassRegrow = () => {
+  // Dig the surface block at player position and report queue state
+  const x = Math.floor(player.pos.x), z = Math.floor(player.pos.z);
+  for (let y = Math.floor(player.pos.y); y >= 0; y--) {
+    if (world.getBlock(x, y, z) !== 0) {
+      world.setBlock(x, y, z, 0); // break it
+      const q = world._grassQueue.size;
+      return `broke (${x},${y},${z}), queue=${q}, regrows in ${Math.round((world._grassQueue.get(`${x},${y-1},${z}`) - Date.now())/1000)}s`;
+    }
+  }
+  return 'no surface block found';
+};
 window.__findCity = () => {
   for (let x = 0; x < 1200; x += 10) {
     for (let z = 0; z < 1200; z += 10) {

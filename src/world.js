@@ -11,11 +11,14 @@ import * as B from './blocks.js';
 
 const RENDER_DIST = 7;
 
+const GRASS_REGROW_MS = 8000; // ms before exposed dirt regrows grass
+
 export class World {
   constructor(scene, seed = Math.random() * 10000) {
     this.scene  = scene;
     this.chunks = new Map();
     this.seed   = seed;
+    this._grassQueue = new Map(); // `x,y,z` → regrow timestamp
 
     const alea = (s) => { let n = s; return () => { n = (n * 1664525 + 1013904223) >>> 0; return n / 0x100000000; }; };
     const rng = alea(seed);
@@ -75,6 +78,19 @@ export class World {
     const lx = ((wx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const lz = ((wz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     chunk.setLocal(lx, wy, lz, id);
+
+    // Grass regrowth: when a block becomes AIR, queue the dirt below for regrowth
+    if (id === B.AIR) {
+      const below = this.getBlock(wx, wy - 1, wz);
+      if (below === B.DIRT) {
+        this._grassQueue.set(`${wx},${wy - 1},${wz}`, Date.now() + GRASS_REGROW_MS);
+      }
+    }
+    // Cancel regrowth if something is placed on top of queued dirt
+    if (id !== B.AIR) {
+      this._grassQueue.delete(`${wx},${wy},${wz}`);   // placed on the dirt itself (rare)
+      this._grassQueue.delete(`${wx},${wy - 1},${wz}`); // placed above queued dirt
+    }
 
     // Also rebuild neighbours if on border
     const neighbors = [];
@@ -140,6 +156,19 @@ export class World {
         this.traffic.despawnChunk(k);
         chunk.dispose();
         this.chunks.delete(k);
+      }
+    }
+
+    // Grass regrowth: convert queued exposed dirt back to grass
+    if (this._grassQueue.size > 0) {
+      const now = Date.now();
+      for (const [key, at] of this._grassQueue) {
+        if (now < at) continue;
+        this._grassQueue.delete(key);
+        const [x, y, z] = key.split(',').map(Number);
+        if (this.getBlock(x, y, z) === B.DIRT && this.getBlock(x, y + 1, z) === B.AIR) {
+          this.setBlock(x, y, z, B.GRASS);
+        }
       }
     }
 
