@@ -47,6 +47,8 @@ export const TV            = 44;  // dark screen
 export const STOOL         = 45;  // bar/office stool
 export const FILING_CABINET = 46;
 export const ESCALATOR_UP  = 47;
+export const LADDER        = 48;  // climbable wall block
+export const FENCE         = 49;  // wooden barrier
 
 // ── Tool / material item IDs (not placeable blocks) ──────────────────────────
 export const TOOL_PICKAXE  = 50;
@@ -60,6 +62,19 @@ export const GOLD_COIN     = 57;  // currency
 export const IRON_INGOT    = 60;  // crafted from iron ore
 export const STEEL_INGOT   = 61;  // iron ingot + coal
 export const VEHICLE       = 62;  // deployable car
+export const GOLD_INGOT    = 63;  // smelted from gold ore
+export const DIAMOND       = 64;  // smelted from diamond ore
+export const LANTERN       = 65;  // hanging emissive light
+
+// ── Tiered tools ──────────────────────────────────────────────────────────────
+export const TOOL_PICKAXE_GOLD    = 66;
+export const TOOL_AXE_GOLD        = 67;
+export const TOOL_SHOVEL_GOLD     = 68;
+export const TOOL_SWORD_GOLD      = 69;
+export const TOOL_PICKAXE_DIAMOND = 70;
+export const TOOL_AXE_DIAMOND     = 71;
+export const TOOL_SHOVEL_DIAMOND  = 72;
+export const TOOL_SWORD_DIAMOND   = 73;
 
 // ── Block definitions ─────────────────────────────────────────────────────────
 // action      – which tool class applies ('dig'|'chop'|'mine'|'break')
@@ -117,31 +132,50 @@ export const BLOCK_DEFS = [
   { name:'Stool',          solid:true, action:'chop', breakTime:0.6, requiresTool:false, handMult:3.0, textures:{ all:[6,3] }, color:'#7a5230' },
   { name:'Filing Cabinet', solid:true, action:'mine', breakTime:1.5, requiresTool:true, textures:{ all:[7,3] }, color:'#808080' },
   { name:'Escalator',     solid:false, action:'break', breakTime:0.3, requiresTool:false, handMult:1.0, emissive:true, textures:{ all:[8,3] }, color:'#f0c040' },
+  { name:'Ladder',        solid:false, action:'break', breakTime:0.3, requiresTool:false, handMult:1.0, textures:{ all:[9,3] }, color:'#a07030' },
+  { name:'Fence',         solid:true,  action:'chop',  breakTime:1.5, requiresTool:false, handMult:3.5, textures:{ all:[10,3] }, color:'#c8a264' },
+  // IDs 50-64 are tools/items — no BLOCK_DEFS entries
+  null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, // 50-64
+  { name:'Lantern',       solid:true,  action:'break', breakTime:0.3, requiresTool:false, handMult:1.0, emissive:true, textures:{ all:[11,3] }, color:'#f8a020' },
 ];
 
 // ── Tool definitions ───────────────────────────────────────────────────────────
+// speed: multiplier on break time (higher = faster). damage: melee dmg dealt.
 export const TOOL_DEFS = {
-  [TOOL_PICKAXE]: { name:'Pickaxe', toolAction:'mine', isItem:true, maxStack:1 },
-  [TOOL_AXE]:     { name:'Axe',     toolAction:'chop', isItem:true, maxStack:1 },
-  [TOOL_SHOVEL]:  { name:'Shovel',  toolAction:'dig',  isItem:true, maxStack:1 },
-  [TOOL_SWORD]:   { name:'Sword',   toolAction:'swing',isItem:true, maxStack:1 },
-  [TOOL_HOE]:     { name:'Hoe',     toolAction:'till', isItem:true, maxStack:1 },
+  [TOOL_PICKAXE]:         { name:'Stone Pickaxe', toolAction:'mine',  isItem:true, maxStack:1, speed:1.0, damage:1 },
+  [TOOL_AXE]:             { name:'Stone Axe',     toolAction:'chop',  isItem:true, maxStack:1, speed:1.0, damage:1 },
+  [TOOL_SHOVEL]:          { name:'Stone Shovel',  toolAction:'dig',   isItem:true, maxStack:1, speed:1.0, damage:1 },
+  [TOOL_SWORD]:           { name:'Stone Sword',   toolAction:'swing', isItem:true, maxStack:1, speed:1.0, damage:2 },
+  [TOOL_HOE]:             { name:'Hoe',           toolAction:'till',  isItem:true, maxStack:1, speed:1.0, damage:1 },
+  [TOOL_PICKAXE_GOLD]:    { name:'Gold Pickaxe',  toolAction:'mine',  isItem:true, maxStack:1, speed:2.0, damage:1 },
+  [TOOL_AXE_GOLD]:        { name:'Gold Axe',      toolAction:'chop',  isItem:true, maxStack:1, speed:2.0, damage:1 },
+  [TOOL_SHOVEL_GOLD]:     { name:'Gold Shovel',   toolAction:'dig',   isItem:true, maxStack:1, speed:2.0, damage:1 },
+  [TOOL_SWORD_GOLD]:      { name:'Gold Sword',    toolAction:'swing', isItem:true, maxStack:1, speed:1.0, damage:3 },
+  [TOOL_PICKAXE_DIAMOND]: { name:'Diamond Pickaxe',toolAction:'mine', isItem:true, maxStack:1, speed:4.0, damage:2 },
+  [TOOL_AXE_DIAMOND]:     { name:'Diamond Axe',   toolAction:'chop',  isItem:true, maxStack:1, speed:4.0, damage:2 },
+  [TOOL_SHOVEL_DIAMOND]:  { name:'Diamond Shovel',toolAction:'dig',   isItem:true, maxStack:1, speed:4.0, damage:2 },
+  [TOOL_SWORD_DIAMOND]:   { name:'Diamond Sword', toolAction:'swing', isItem:true, maxStack:1, speed:1.0, damage:4 },
 };
 
 // ── Material item definitions ──────────────────────────────────────────────────
 export const ITEM_DEFS = {
-  [STICK]: { name:'Stick', isItem:true, maxStack:64 },
-  [COAL]:      { name:'Coal',      isItem:true, maxStack:64 },
-  [GOLD_COIN]: { name:'Gold Coin', isItem:true, maxStack:999 },
-  [IRON_INGOT]:    { name:'Iron Ingot',   isItem:true, maxStack:64 },
-  [STEEL_INGOT]:   { name:'Steel Ingot',  isItem:true, maxStack:64 },
-  [VEHICLE]:       { name:'Vehicle',      isItem:true, maxStack:1  },
+  [STICK]:       { name:'Stick',        isItem:true, maxStack:64  },
+  [COAL]:        { name:'Coal',         isItem:true, maxStack:64  },
+  [GOLD_COIN]:   { name:'Gold Coin',    isItem:true, maxStack:999 },
+  [IRON_INGOT]:  { name:'Iron Ingot',   isItem:true, maxStack:64  },
+  [STEEL_INGOT]: { name:'Steel Ingot',  isItem:true, maxStack:64  },
+  [VEHICLE]:     { name:'Vehicle',      isItem:true, maxStack:1   },
+  [GOLD_INGOT]:  { name:'Gold Ingot',   isItem:true, maxStack:64  },
+  [DIAMOND]:     { name:'Diamond',      isItem:true, maxStack:64  },
 };
 
 // ── Block drop overrides (id → drop instead of the block itself) ───────────────
 // Used when mining returns a different item than the block placed.
 export const BLOCK_DROPS = {
-  [COAL_ORE]: { id: COAL, count: 1 },
+  [COAL_ORE]:    { id: COAL,       count: 1 },
+  [IRON_ORE]:    { id: IRON_INGOT, count: 1 },
+  [GOLD_ORE]:    { id: GOLD_INGOT, count: 1 },
+  [DIAMOND_ORE]: { id: DIAMOND,    count: 1 },
 };
 
 // Returns the def for any item ID (block, tool, or material).
@@ -207,11 +241,14 @@ export const ALL_BLOCKS = [
   OBSIDIAN, BRICK, BOOKSHELF, MOSSY_COBBLE, SPONGE, LAVA,
   WOOL, TORCH, CHEST, BED, CONCRETE, ASPHALT, DOOR_CLOSED, SIDEWALK, CLAY,
   CHAIR, TABLE, LAMP, COUNTER, DESK, TV, STOOL, FILING_CABINET, ESCALATOR_UP,
+  LADDER, FENCE, LANTERN,
 ];
 
 // All items shown in the creative picker (tools + materials + blocks)
 export const ALL_ITEMS = [
   TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_SWORD, TOOL_HOE,
-  STICK, COAL, GOLD_COIN,
+  TOOL_PICKAXE_GOLD, TOOL_AXE_GOLD, TOOL_SHOVEL_GOLD, TOOL_SWORD_GOLD,
+  TOOL_PICKAXE_DIAMOND, TOOL_AXE_DIAMOND, TOOL_SHOVEL_DIAMOND, TOOL_SWORD_DIAMOND,
+  STICK, COAL, GOLD_COIN, IRON_INGOT, STEEL_INGOT, GOLD_INGOT, DIAMOND,
   ...ALL_BLOCKS,
 ];

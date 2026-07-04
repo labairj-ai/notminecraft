@@ -13,10 +13,15 @@
 import {
   WOOD, PLANKS, COBBLESTONE, STONE, SAND, GRAVEL, CRAFTING, FURNACE, LEAVES,
   WOOL, TORCH, CHEST, BED, GLASS, BRICK, MOSSY_COBBLE, CONCRETE, ASPHALT,
-  DOOR_CLOSED, SIDEWALK, CLAY, IRON_ORE, GLOWSTONE,
+  DOOR_CLOSED, SIDEWALK, CLAY, IRON_ORE, GOLD_ORE, DIAMOND_ORE, GLOWSTONE,
+  BOOKSHELF, TNT,
   CHAIR, TABLE, LAMP, COUNTER, DESK, TV, STOOL, FILING_CABINET, ESCALATOR_UP,
-  IRON_INGOT, STEEL_INGOT, VEHICLE,
-  STICK, COAL, TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_SWORD, TOOL_HOE,
+  LADDER, FENCE, LANTERN,
+  IRON_INGOT, STEEL_INGOT, GOLD_INGOT, DIAMOND, VEHICLE,
+  STICK, COAL,
+  TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_SWORD, TOOL_HOE,
+  TOOL_PICKAXE_GOLD, TOOL_AXE_GOLD, TOOL_SHOVEL_GOLD, TOOL_SWORD_GOLD,
+  TOOL_PICKAXE_DIAMOND, TOOL_AXE_DIAMOND, TOOL_SHOVEL_DIAMOND, TOOL_SWORD_DIAMOND,
 } from './blocks.js';
 
 const P  = PLANKS;
@@ -225,6 +230,94 @@ export const RECIPES = [
   //  G I
   { size: 2, rows: [[IRON_INGOT, GLOWSTONE], [GLOWSTONE, IRON_INGOT]],
     result: { id: ESCALATOR_UP, count: 4 } },
+
+  // ── Smelting / refining ────────────────────────────────────────────────────
+
+  // Gold ingot: 1 gold ore → 1 gold ingot
+  { size: 2, shapeless: true, ingredients: [GOLD_ORE],
+    result: { id: GOLD_INGOT, count: 1 } },
+
+  // Diamond: 1 diamond ore → 1 diamond
+  { size: 2, shapeless: true, ingredients: [DIAMOND_ORE],
+    result: { id: DIAMOND, count: 1 } },
+
+  // ── New blocks ─────────────────────────────────────────────────────────────
+
+  // Bookshelf: 6 planks + 3 wool → 1 bookshelf
+  //  P P P
+  //  W W W
+  //  P P P
+  { size: 3, rows: [[PLANKS, PLANKS, PLANKS], [WOOL, WOOL, WOOL], [PLANKS, PLANKS, PLANKS]],
+    result: { id: BOOKSHELF, count: 1 } },
+
+  // TNT: 5 gravel + 4 coal (alternating) → 1 TNT
+  //  G C G
+  //  C G C
+  //  G C G
+  { size: 3, rows: [[GRAVEL, COAL, GRAVEL], [COAL, GRAVEL, COAL], [GRAVEL, COAL, GRAVEL]],
+    result: { id: TNT, count: 1 } },
+
+  // Ladder: 7 sticks in H-frame → 3 ladders
+  //  S _ S
+  //  S S S
+  //  S _ S
+  { size: 3, rows: [[STICK, null, STICK], [STICK, STICK, STICK], [STICK, null, STICK]],
+    result: { id: LADDER, count: 3 } },
+
+  // Fence: 2×3 planks + 4 sticks → 4 fences
+  //  P S P
+  //  P S P
+  { size: 3, rows: [[PLANKS, STICK, PLANKS], [PLANKS, STICK, PLANKS]],
+    result: { id: FENCE, count: 4 } },
+
+  // Lantern: glass around glowstone core with iron frame → 2 lanterns
+  //  I I I
+  //  I G I
+  //  I I I  (all iron except center glowstone)
+  { size: 3, rows: [[IRON_INGOT, GLASS, IRON_INGOT], [GLASS, GLOWSTONE, GLASS], [IRON_INGOT, GLASS, IRON_INGOT]],
+    result: { id: LANTERN, count: 2 } },
+
+  // ── Gold tools (2× faster mining, 3 damage for sword) ─────────────────────
+
+  // Gold pickaxe: GGG / _S_ / _S_
+  { size: 3, rows: [[GOLD_INGOT, GOLD_INGOT, GOLD_INGOT], [null, STICK, null], [null, STICK, null]],
+    result: { id: TOOL_PICKAXE_GOLD, count: 1 } },
+
+  // Gold axe left
+  { size: 3, rows: [[GOLD_INGOT, GOLD_INGOT], [GOLD_INGOT, STICK], [null, STICK]],
+    result: { id: TOOL_AXE_GOLD, count: 1 } },
+
+  // Gold axe right
+  { size: 3, rows: [[GOLD_INGOT, GOLD_INGOT], [STICK, GOLD_INGOT], [STICK, null]],
+    result: { id: TOOL_AXE_GOLD, count: 1 } },
+
+  // Gold shovel: _G_ / _S_ / _S_
+  { size: 3, rows: [[GOLD_INGOT], [STICK], [STICK]],
+    result: { id: TOOL_SHOVEL_GOLD, count: 1 } },
+
+  // Gold sword: _G_ / _G_ / _S_
+  { size: 3, rows: [[GOLD_INGOT], [GOLD_INGOT], [STICK]],
+    result: { id: TOOL_SWORD_GOLD, count: 1 } },
+
+  // ── Diamond tools (4× faster mining, 4 damage for sword) ──────────────────
+
+  // Diamond pickaxe
+  { size: 3, rows: [[DIAMOND, DIAMOND, DIAMOND], [null, STICK, null], [null, STICK, null]],
+    result: { id: TOOL_PICKAXE_DIAMOND, count: 1 } },
+
+  // Diamond axe left / right
+  { size: 3, rows: [[DIAMOND, DIAMOND], [DIAMOND, STICK], [null, STICK]],
+    result: { id: TOOL_AXE_DIAMOND, count: 1 } },
+  { size: 3, rows: [[DIAMOND, DIAMOND], [STICK, DIAMOND], [STICK, null]],
+    result: { id: TOOL_AXE_DIAMOND, count: 1 } },
+
+  // Diamond shovel
+  { size: 3, rows: [[DIAMOND], [STICK], [STICK]],
+    result: { id: TOOL_SHOVEL_DIAMOND, count: 1 } },
+
+  // Diamond sword
+  { size: 3, rows: [[DIAMOND], [DIAMOND], [STICK]],
+    result: { id: TOOL_SWORD_DIAMOND, count: 1 } },
 ];
 
 // ── Recipe matcher ─────────────────────────────────────────────────────────────

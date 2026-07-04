@@ -3,6 +3,7 @@ import { World } from './world.js';
 import { Player } from './player.js';
 import { UI } from './ui.js';
 import { FirstPersonHand } from './hand.js';
+import * as B from './blocks.js';
 import { BLOCK_DEFS, getToolAction } from './blocks.js';
 
 // ── Renderer ──────────────────────────────────────────────────────────────────
@@ -364,7 +365,11 @@ document.addEventListener('mousedown', e => {
   // Only attack when there's no block target (swinging in air / at NPC)
   if (!player.target) {
     const npc = world.npcs.getNearest(player.pos, 3.0);
-    if (npc) npc.takeDamage(1);
+    if (npc) {
+      const toolDef = B.TOOL_DEFS[player.hotbar[player.selectedSlot]?.id];
+      const dmg = toolDef?.damage ?? 1;
+      npc.takeDamage(dmg);
+    }
   }
 });
 

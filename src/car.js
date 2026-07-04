@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { STREET_PERIOD, STREET_WIDTH, SIDEWALK_WIDTH } from './city.js';
+
+function mod(x, n) { return ((x % n) + n) % n; }
+const AI_TARGET_SPEED = 7;  // blocks/sec for autonomous cars
 
 function mat(color, extra = {}) {
   return new THREE.MeshLambertMaterial({ color, ...extra });
@@ -32,6 +36,9 @@ export class Car {
     this.steer   = 0;
     this.occupied = false;
     this._scene  = scene;
+    this._inIntersection = false;
+    this._stuckTimer     = 0;
+    this._lastPos        = new THREE.Vector3(wx, wy, wz);
 
     const r = srng(seed);
     const pal = PALETTES[Math.floor(r() * PALETTES.length)];
@@ -113,11 +120,54 @@ export class Car {
     this._wheelRot = 0;
   }
 
-  update(dt, keys) {
-    if (!this.occupied) return;
+  // Called every frame; keys is null for AI-driven cars
+  update(dt, keys, trafficMgr, cityInfoFn) {
+    if (this.occupied && keys) {
+      this._playerUpdate(dt, keys);
+    } else if (!this.occupied) {
+      this._aiUpdate(dt, trafficMgr, cityInfoFn);
+    }
+    this._applyMovement(dt);
+    // Keep AI cars on asphalt only
+    if (!this.occupied && cityInfoFn) this._constrainToRoad(cityInfoFn);
+  }
 
+  // Snap AI car back onto road if it has drifted onto a sidewalk
+  _constrainToRoad(cityInfoFn) {
+    const city = cityInfoFn(this.pos.x, this.pos.z);
+    if (!city) return;
+
+    const fpx = mod(city.localX, STREET_PERIOD);
+    const fpz = mod(city.localZ, STREET_PERIOD);
+    const ipx = Math.floor(fpx);
+    const ipz = Math.floor(fpz);
+
+    // Only correct in straight corridors (not intersections)
+    const inZCorr = ipx < STREET_WIDTH && ipz >= STREET_WIDTH;
+    const inXCorr = ipz < STREET_WIDTH && ipx >= STREET_WIDTH;
+
+    const roadMax = STREET_WIDTH - SIDEWALK_WIDTH; // 9
+    let corrected = false;
+
+    if (inZCorr) {
+      if (fpx < SIDEWALK_WIDTH) {
+        this.pos.x += SIDEWALK_WIDTH + 0.5 - fpx; corrected = true;
+      } else if (fpx > roadMax) {
+        this.pos.x += roadMax - 0.5 - fpx; corrected = true;
+      }
+    } else if (inXCorr) {
+      if (fpz < SIDEWALK_WIDTH) {
+        this.pos.z += SIDEWALK_WIDTH + 0.5 - fpz; corrected = true;
+      } else if (fpz > roadMax) {
+        this.pos.z += roadMax - 0.5 - fpz; corrected = true;
+      }
+    }
+
+    if (corrected) this._group.position.copy(this.pos);
+  }
+
+  _playerUpdate(dt, keys) {
     const accel = 14, maxSpd = 18, drag = 3;
-
     if (keys['KeyW'] || keys['ArrowUp']) {
       this.speed = Math.min(this.speed + accel * dt, maxSpd);
     } else if (keys['KeyS'] || keys['ArrowDown']) {
@@ -126,32 +176,83 @@ export class Car {
       this.speed *= Math.exp(-drag * dt);
       if (Math.abs(this.speed) < 0.05) this.speed = 0;
     }
-
-    // Steering — more responsive at low speed
-    const steerMax = 0.55;
-    const steerRate = 1.6;
+    const steerMax = 0.55, steerRate = 1.6;
     if (Math.abs(this.speed) > 0.2) {
       if (keys['KeyA'] || keys['ArrowLeft'])  this.steer -= steerRate * dt;
       if (keys['KeyD'] || keys['ArrowRight']) this.steer += steerRate * dt;
     }
     this.steer *= Math.exp(-4 * dt);
     this.steer = Math.max(-steerMax, Math.min(steerMax, this.steer));
-
-    // Turn
     this.heading += this.steer * this.speed * 0.12 * dt;
+  }
 
-    // Move
+  _aiUpdate(dt, trafficMgr, cityInfoFn) {
+    const city = cityInfoFn ? cityInfoFn(this.pos.x, this.pos.z) : null;
+    if (!city) {
+      // Outside city — slow to stop
+      this.speed = Math.max(0, this.speed - 6 * dt);
+      return;
+    }
+    const px = mod(Math.floor(city.localX), STREET_PERIOD);
+    const pz = mod(Math.floor(city.localZ), STREET_PERIOD);
+    const atIntersection = px < STREET_WIDTH && pz < STREET_WIDTH;
+
+    if (!atIntersection) {
+      this._inIntersection = false;
+
+      // Red-light check: look SIDEWALK_WIDTH+2 blocks ahead
+      if (trafficMgr) {
+        const la = SIDEWALK_WIDTH + 2;
+        const ax = this.pos.x + Math.sin(this.heading) * la;
+        const az = this.pos.z + Math.cos(this.heading) * la;
+        const ac = cityInfoFn(ax, az);
+        if (ac) {
+          const apx = mod(Math.floor(ac.localX), STREET_PERIOD);
+          const apz = mod(Math.floor(ac.localZ), STREET_PERIOD);
+          if (apx < STREET_WIDTH && apz < STREET_WIDTH &&
+              !trafficMgr.isGreenForHeading(this.heading)) {
+            // Brake to a stop before the intersection
+            this.speed = Math.max(0, this.speed - 10 * dt);
+            return;
+          }
+        }
+      }
+
+      // Stuck detection — if barely moved in 3 s, turn 90°
+      this._stuckTimer += dt;
+      if (this._stuckTimer > 3.0) {
+        const moved = this.pos.distanceTo(this._lastPos);
+        if (moved < 1.0) {
+          this.heading += (Math.random() < 0.5 ? 1 : -1) * Math.PI / 2;
+          this.heading = Math.round(this.heading / (Math.PI / 2)) * (Math.PI / 2);
+        }
+        this._stuckTimer = 0;
+        this._lastPos.copy(this.pos);
+      }
+    } else if (!this._inIntersection) {
+      // First frame entering intersection → decide direction
+      this._inIntersection = true;
+      const r = Math.random();
+      if (r < 0.30)      this.heading -= Math.PI / 2; // left
+      else if (r < 0.55) this.heading += Math.PI / 2; // right
+      // else straight
+      this.heading = Math.round(this.heading / (Math.PI / 2)) * (Math.PI / 2);
+    }
+
+    // Accelerate toward target
+    this.speed = Math.min(AI_TARGET_SPEED, this.speed + 6 * dt);
+  }
+
+  _applyMovement(dt) {
     this.pos.x += Math.sin(this.heading) * this.speed * dt;
     this.pos.z += Math.cos(this.heading) * this.speed * dt;
-
     this._group.position.copy(this.pos);
     this._group.rotation.y = this.heading;
 
-    // Wheel animation
     this._wheelRot += this.speed * dt * 2.5;
     for (let i = 0; i < this._wheels.length; i++) {
       this._wheels[i].rotation.x = -this._wheelRot;
-      if (i < 2) this._wheels[i].rotation.y = this.steer * 0.45;
+      if (i < 2) this._wheels[i].rotation.y = (this.occupied ? this.steer : 0) * 0.45;
     }
   }
 
@@ -209,9 +310,19 @@ export class CarManager {
     return best;
   }
 
-  update(dt, keys, activeCar) {
+  // Place a player-crafted vehicle on the road
+  deployAt(scene, wx, wy, wz, heading) {
+    const seed = Math.floor(wx * 7411 + wz * 5003 + Date.now());
+    const k    = `car:${wx.toFixed(1)},${wz.toFixed(1)}`;
+    if (!this._cars.has(k)) {
+      const car = new Car(scene, { wx, wy, wz, seed, heading });
+      this._cars.set(k, car);
+    }
+  }
+
+  update(dt, keys, activeCar, trafficMgr, cityInfoFn) {
     for (const car of this._cars.values()) {
-      car.update(dt, car === activeCar ? keys : {});
+      car.update(dt, car === activeCar ? keys : null, trafficMgr, cityInfoFn);
     }
   }
 }

@@ -289,8 +289,10 @@ export class Player {
       return;
     }
 
-    const mult = correctTool ? 1.0 : (def.handMult ?? 3.0);
-    this.effectiveBreakTime = def.breakTime * mult;
+    const toolDef  = B.TOOL_DEFS[this.hotbar[this.selectedSlot]?.id];
+    const speed    = correctTool ? (toolDef?.speed ?? 1.0) : 1.0;
+    const mult     = correctTool ? 1.0 : (def.handMult ?? 3.0);
+    this.effectiveBreakTime = (def.breakTime * mult) / speed;
     this.breakProgress += dt;
 
     if (this.breakProgress >= this.effectiveBreakTime) {

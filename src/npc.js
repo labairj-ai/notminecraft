@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import {
   PLANKS, STONE, COBBLESTONE, GLASS, CONCRETE, TORCH, CHEST, BED,
   TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_SWORD, TOOL_HOE,
-  STICK, COAL, WOOL,
+  TOOL_PICKAXE_GOLD, TOOL_AXE_GOLD, TOOL_SWORD_GOLD,
+  TOOL_PICKAXE_DIAMOND, TOOL_SWORD_DIAMOND,
+  STICK, COAL, WOOL, GOLD_INGOT, DIAMOND, LANTERN, LADDER, FENCE,
 } from './blocks.js';
 import { getTreeForRole } from './dialogue.js';
 
@@ -134,18 +136,26 @@ export const SHOP_INVENTORIES = {
     { id: GLASS,       price:  5, count: 2,  label: 'Glass ×2'         },
     { id: CONCRETE,    price:  4, count: 4,  label: 'Concrete ×4'      },
     { id: TORCH,       price:  2, count: 4,  label: 'Torch ×4'         },
+    { id: LANTERN,     price:  8, count: 1,  label: 'Lantern'          },
     { id: CHEST,       price: 18, count: 1,  label: 'Chest'            },
     { id: WOOL,        price:  3, count: 4,  label: 'Wool ×4'          },
     { id: BED,         price: 14, count: 1,  label: 'Bed'              },
+    { id: LADDER,      price:  2, count: 3,  label: 'Ladder ×3'        },
+    { id: FENCE,       price:  2, count: 4,  label: 'Fence ×4'         },
   ],
   tools: [
-    { id: TOOL_PICKAXE, price: 20, count: 1, label: 'Pickaxe'          },
-    { id: TOOL_AXE,     price: 18, count: 1, label: 'Axe'              },
-    { id: TOOL_SHOVEL,  price: 14, count: 1, label: 'Shovel'           },
-    { id: TOOL_SWORD,   price: 24, count: 1, label: 'Sword'            },
-    { id: TOOL_HOE,     price: 12, count: 1, label: 'Hoe'              },
-    { id: TORCH,        price:  2, count: 4, label: 'Torch ×4'         },
-    { id: STICK,        price:  1, count: 8, label: 'Sticks ×8'        },
+    { id: TOOL_PICKAXE,         price: 20, count: 1, label: 'Stone Pickaxe'   },
+    { id: TOOL_AXE,             price: 18, count: 1, label: 'Stone Axe'       },
+    { id: TOOL_SHOVEL,          price: 14, count: 1, label: 'Stone Shovel'    },
+    { id: TOOL_SWORD,           price: 24, count: 1, label: 'Stone Sword'     },
+    { id: TOOL_HOE,             price: 12, count: 1, label: 'Hoe'             },
+    { id: TOOL_PICKAXE_GOLD,    price: 45, count: 1, label: 'Gold Pickaxe'    },
+    { id: TOOL_AXE_GOLD,        price: 40, count: 1, label: 'Gold Axe'        },
+    { id: TOOL_SWORD_GOLD,      price: 55, count: 1, label: 'Gold Sword'      },
+    { id: TOOL_PICKAXE_DIAMOND, price: 90, count: 1, label: 'Diamond Pickaxe' },
+    { id: TOOL_SWORD_DIAMOND,   price:110, count: 1, label: 'Diamond Sword'   },
+    { id: TORCH,                price:  2, count: 4, label: 'Torch ×4'        },
+    { id: STICK,                price:  1, count: 8, label: 'Sticks ×8'       },
   ],
   general: [
     { id: COAL,        price:  3, count: 2,  label: 'Coal ×2'          },
@@ -155,6 +165,8 @@ export const SHOP_INVENTORIES = {
     { id: COBBLESTONE, price:  1, count: 8,  label: 'Cobblestone ×8'   },
     { id: TORCH,       price:  2, count: 4,  label: 'Torch ×4'         },
     { id: GLASS,       price:  4, count: 2,  label: 'Glass ×2'         },
+    { id: GOLD_INGOT,  price: 20, count: 1,  label: 'Gold Ingot'       },
+    { id: DIAMOND,     price: 40, count: 1,  label: 'Diamond'          },
   ],
 };
 

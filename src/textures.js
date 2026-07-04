@@ -622,6 +622,46 @@ export function createAtlas() {
   ctx.fillRect(8*TEX_SIZE+5, 3*TEX_SIZE+4, 6, 2); // arrowhead row 2
   ctx.fillRect(8*TEX_SIZE+6, 3*TEX_SIZE+2, 4, 2); // arrowhead row 3
 
+  // [9,3] ladder (wood side-rails with rungs)
+  fill(ctx, 9, 3, 'rgba(0,0,0,0)'); // transparent background
+  ctx.fillStyle = '#8B5E3C';
+  // vertical rails
+  ctx.fillRect(9*TEX_SIZE+1, 3*TEX_SIZE, 3, TEX_SIZE);
+  ctx.fillRect(9*TEX_SIZE+12, 3*TEX_SIZE, 3, TEX_SIZE);
+  // horizontal rungs
+  for (let y = 1; y <= 13; y += 4) {
+    ctx.fillStyle = '#a07030';
+    ctx.fillRect(9*TEX_SIZE+1, 3*TEX_SIZE+y, 14, 2);
+  }
+
+  // [10,3] fence (vertical post with horizontal rails)
+  fill(ctx, 10, 3, 'rgba(0,0,0,0)');
+  ctx.fillStyle = '#c8a264';
+  // center post
+  ctx.fillRect(10*TEX_SIZE+7, 3*TEX_SIZE, 2, TEX_SIZE);
+  // rails at 1/3 and 2/3 height
+  ctx.fillRect(10*TEX_SIZE, 3*TEX_SIZE+4, TEX_SIZE, 3);
+  ctx.fillRect(10*TEX_SIZE, 3*TEX_SIZE+10, TEX_SIZE, 3);
+  // rail shading
+  ctx.fillStyle = '#a07030';
+  ctx.fillRect(10*TEX_SIZE, 3*TEX_SIZE+4, TEX_SIZE, 1);
+  ctx.fillRect(10*TEX_SIZE, 3*TEX_SIZE+10, TEX_SIZE, 1);
+
+  // [11,3] lantern (warm glowing orange cage)
+  fill(ctx, 11, 3, '#f8a020');
+  noise(ctx, 11, 3, ['#ffcc40','#e88010','#ffd060'], 0.35, 113);
+  // iron cage bars
+  ctx.fillStyle = '#555';
+  ctx.fillRect(11*TEX_SIZE,   3*TEX_SIZE,   TEX_SIZE, 1); // top
+  ctx.fillRect(11*TEX_SIZE,   3*TEX_SIZE+15,TEX_SIZE, 1); // bottom
+  ctx.fillRect(11*TEX_SIZE,   3*TEX_SIZE,   1, TEX_SIZE); // left
+  ctx.fillRect(11*TEX_SIZE+15,3*TEX_SIZE,   1, TEX_SIZE); // right
+  ctx.fillRect(11*TEX_SIZE+7, 3*TEX_SIZE,   2, TEX_SIZE); // center v
+  ctx.fillRect(11*TEX_SIZE,   3*TEX_SIZE+7, TEX_SIZE, 2); // center h
+  // bright glowing core
+  ctx.fillStyle = '#fff8c0';
+  ctx.fillRect(11*TEX_SIZE+5, 3*TEX_SIZE+5, 6, 6);
+
   return canvas;
 }
 
