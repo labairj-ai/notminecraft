@@ -417,7 +417,19 @@ class NPC {
     }
 
     // ── Wandering ─────────────────────────────────────────────────────────
-    if (this.wander) {
+    if (this.talking) {
+      // Stop in place and face the player while in conversation
+      this._moving = false;
+      this._legL.rotation.x *= 0.8;
+      this._legR.rotation.x *= 0.8;
+      this._armL.rotation.x *= 0.8;
+      this._armR.rotation.x *= 0.8;
+      if (playerPos) {
+        const tx = Math.atan2(playerPos.x - this.pos.x, playerPos.z - this.pos.z);
+        const dy = tx - this._group.rotation.y;
+        this._group.rotation.y += Math.sin(dy) * Math.min(1, dt * 6);
+      }
+    } else if (this.wander) {
       this._wanderTimer -= dt;
       if (this._wanderTimer <= 0) {
         const r = srng(Math.floor(Date.now() / 4000) ^ (this.homePos.x * 31 + this.homePos.z));

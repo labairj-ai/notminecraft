@@ -320,8 +320,9 @@ document.addEventListener('keydown', e => {
 });
 
 function openDialog(npc) {
-  activeNPC   = npc;
-  gameState   = 'dialog'; // set BEFORE exitPointerLock to avoid pause-screen trigger
+  activeNPC     = npc;
+  npc.talking   = true;
+  gameState     = 'dialog'; // set BEFORE exitPointerLock to avoid pause-screen trigger
   document.exitPointerLock();
   ui.openDialog(npc);
 }
@@ -329,6 +330,7 @@ function openDialog(npc) {
 function closeDialogOrShop() {
   ui.closeDialog();
   ui.closeShop();
+  if (activeNPC) activeNPC.talking = false;
   activeNPC = null;
   gameState = 'playing';
   lockPointer();
