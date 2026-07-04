@@ -131,7 +131,7 @@ export const BLOCK_DEFS = [
   { name:'TV',             solid:true, action:'break', breakTime:0.5, requiresTool:false, handMult:1.0, emissive:true, textures:{ top:[5,3], side:[5,3], bottom:[5,3] }, color:'#111111' },
   { name:'Stool',          solid:true, action:'chop', breakTime:0.6, requiresTool:false, handMult:3.0, textures:{ all:[6,3] }, color:'#7a5230' },
   { name:'Filing Cabinet', solid:true, action:'mine', breakTime:1.5, requiresTool:true, textures:{ all:[7,3] }, color:'#808080' },
-  { name:'Escalator',     solid:false, action:'break', breakTime:0.3, requiresTool:false, handMult:1.0, emissive:true, textures:{ all:[8,3] }, color:'#f0c040' },
+  { name:'Escalator',     solid:true,  action:'break', breakTime:0.3, requiresTool:false, handMult:1.0, emissive:true, textures:{ all:[8,3] }, color:'#f0c040' },
   { name:'Ladder',        solid:false, action:'break', breakTime:0.3, requiresTool:false, handMult:1.0, textures:{ all:[9,3] }, color:'#a07030' },
   { name:'Fence',         solid:true,  action:'chop',  breakTime:1.5, requiresTool:false, handMult:3.5, textures:{ all:[10,3] }, color:'#c8a264' },
   // IDs 50-64 are tools/items — no BLOCK_DEFS entries

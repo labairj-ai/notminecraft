@@ -358,15 +358,23 @@ export class Player {
       if (this.vel.y < -40) this.vel.y = -40;
     }
 
-    // Escalator: carry player upward when inside an escalator block
+    // Escalator: carry player upward when standing on or above a flush escalator tile.
+    // Scan downward — the tile is solid (player stands on it) and each floor level
+    // has one, so the shaft above is clear air. Stop scanning if a non-escalator
+    // solid block is encountered (player is not in the shaft).
     if (!this.flying) {
       const bx = Math.floor(this.pos.x);
       const bz = Math.floor(this.pos.z);
-      if (this.world.getBlock(bx, Math.floor(this.pos.y),       bz) === B.ESCALATOR_UP ||
-          this.world.getBlock(bx, Math.floor(this.pos.y + 0.9), bz) === B.ESCALATOR_UP) {
+      let inShaft = false;
+      for (let dy = 0; dy <= 6; dy++) {
+        const by = Math.floor(this.pos.y) - dy;
+        if (by < 0) break;
+        const b = this.world.getBlock(bx, by, bz);
+        if (b === B.ESCALATOR_UP) { inShaft = true; break; }
+        if (B.isSolid(b)) break;
+      }
+      if (inShaft) {
         this.vel.y = 5.5;
-        // Snap player to block center so the 0.3-unit body radius doesn't
-        // overlap adjacent floor slabs (PLANKS at upper floor level)
         this.pos.x = bx + 0.5;
         this.pos.z = bz + 0.5;
       }
@@ -376,7 +384,7 @@ export class Player {
     if (!this._collide(nx, this.pos.y, this.pos.z)) this.pos.x = nx; else this.vel.x = 0;
 
     const ny = this.pos.y + this.vel.y * dt;
-    if (!this._collide(this.pos.x, ny, this.pos.z)) {
+    if (!this._collide(this.pos.x, ny, this.pos.z, this.vel.y > 0)) {
       this.pos.y = ny;
       if (!this.flying) this.onGround = false;
     } else {
@@ -391,14 +399,18 @@ export class Player {
     if (this.pos.y < -10) { this.health = 0; this.pos.set(0, 60, 0); this.vel.set(0,0,0); }
   }
 
-  _collide(px, py, pz) {
+  _collide(px, py, pz, throughEscalator = false) {
     const minX = px - HALF_W, maxX = px + HALF_W;
     const minY = py,          maxY = py + PLAYER_H;
     const minZ = pz - HALF_W, maxZ = pz + HALF_W;
     for (let bx = Math.floor(minX); bx <= Math.floor(maxX - 0.001); bx++)
       for (let by = Math.floor(minY); by <= Math.floor(maxY - 0.001); by++)
-        for (let bz = Math.floor(minZ); bz <= Math.floor(maxZ - 0.001); bz++)
-          if (this.world.isSolid(bx, by, bz)) return true;
+        for (let bz = Math.floor(minZ); bz <= Math.floor(maxZ - 0.001); bz++) {
+          const b = this.world.getBlock(bx, by, bz);
+          if (!B.isSolid(b)) continue;
+          if (throughEscalator && b === B.ESCALATOR_UP) continue;
+          return true;
+        }
     return false;
   }
 

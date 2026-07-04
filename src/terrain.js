@@ -6,8 +6,8 @@ import { getCityInfo, getCityColumn, CITY_BASE_Y, DOOR_HEIGHT } from './city.js'
 // blockInFlr: 1 or 2 (position within the 3-block floor period, 0=slab itself)
 // buildingType: 'residential'|'commercial'|'office'|'restaurant'
 function interiorBlock(inX, inZ, floorNum, blockInFlr, wallAxisX, buildingType) {
-  // Escalator column — non-solid, carries player upward
-  if (inX === 2 && inZ === 2) return B.ESCALATOR_UP;
+  // Escalator column — shaft air; floor tiles placed at blockInFlr=0 level
+  if (inX === 2 && inZ === 2) return B.AIR;
   // Step-off shaft — kept clear so players can drop down
   if (inX === 3 && inZ === 2) return B.AIR;
 
@@ -128,7 +128,9 @@ export function generateChunkData(chunkX, chunkZ, noise2D, noise3D, worldSeed = 
           const bh  = col.height;
           const relY = y - baseY;
           if (y === baseY) {
-            data[idx] = B.CONCRETE; // ground slab (all columns)
+            // Escalator column gets a flush floor tile instead of plain concrete
+            data[idx] = (!col.isPerimeter && col.inX === 2 && col.inZ === 2)
+              ? B.ESCALATOR_UP : B.CONCRETE;
           } else if (y <= baseY + bh) {
             if (col.isPerimeter) {
               // ── Exterior walls ──────────────────────────────────────────
@@ -147,9 +149,11 @@ export function generateChunkData(chunkX, chunkZ, noise2D, noise3D, worldSeed = 
               const blockInFlr = relY % 3;
               const floorNum   = Math.floor(relY / 3);
               if (blockInFlr === 0) {
-                // Escalator shaft: open floor hole for upper floors
-                if (floorNum >= 1 &&
-                    ((col.inX === 2 && col.inZ === 2) || (col.inX === 3 && col.inZ === 2))) {
+                if (col.inX === 2 && col.inZ === 2) {
+                  // Escalator tile flush at every floor level — player stands on it
+                  data[idx] = B.ESCALATOR_UP;
+                } else if (col.inX === 3 && col.inZ === 2) {
+                  // Step-off shaft stays open so players can drop down
                   data[idx] = B.AIR;
                 } else {
                   data[idx] = B.PLANKS;
