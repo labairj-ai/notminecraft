@@ -268,6 +268,7 @@ class Animal {
     this._hopTimer  = 0;
     this._hopVelY   = 0;
     this._hopOffY   = 0;
+    this._velY      = 0;  // vertical velocity for gravity
 
     const r = srng(seed);
     this._stagger = r() * Math.PI * 2; // stagger phase so animals aren't in sync
@@ -368,17 +369,7 @@ class Animal {
     const d2 = dx*dx + dz*dz;
     this._moving = d2 > 0.05;
 
-    // ── Hop (rabbit / frog) ───────────────────────────────────────────────────
-    if (cfg.hop) {
-      this._hopTimer -= dt;
-      if (this._moving && this._hopTimer <= 0 && this._hopOffY <= 0.01) {
-        this._hopVelY = this.type === 'rabbit' ? 4.5 : 2.8;
-        this._hopTimer = this.type === 'rabbit' ? 0.35 : 0.8;
-      }
-      this._hopVelY -= 18 * dt; // gravity
-      this._hopOffY = Math.max(0, this._hopOffY + this._hopVelY * dt);
-    }
-
+    // ── Horizontal movement ───────────────────────────────────────────────────
     if (this._moving) {
       const mag = Math.sqrt(d2);
       const step = Math.min(speed * dt, mag);
@@ -394,7 +385,45 @@ class Animal {
       this._group.rotation.y = Math.atan2(dx, dz);
       this._walkPh += dt * cfg.legsPhase;
     } else {
-      this._walkPh *= 0.92; // gradually stop
+      this._walkPh *= 0.92;
+    }
+
+    // ── Ground tracking (land animals) ───────────────────────────────────────
+    if (!cfg.swim) {
+      const gx = Math.floor(this._group.position.x);
+      const gz = Math.floor(this._group.position.z);
+      const fromY = Math.floor(this._group.position.y);
+      for (let dy = 0; dy <= 16; dy++) {
+        if (fromY - dy < 0) break;
+        if (this._world.isSolid(gx, fromY - dy, gz)) {
+          this.homePos.y = (fromY - dy) + 0.5;
+          break;
+        }
+      }
+    }
+
+    // ── Gravity (non-hop, non-swim land animals) ──────────────────────────────
+    if (!cfg.swim && !cfg.hop) {
+      this._velY -= 22 * dt;
+      if (this._velY < -20) this._velY = -20;
+      const rawY = this._group.position.y + this._velY * dt;
+      if (rawY <= this.homePos.y) {
+        this._group.position.y = this.homePos.y;
+        this._velY = 0;
+      } else {
+        this._group.position.y = rawY;
+      }
+    }
+
+    // ── Hop (rabbit / frog) ───────────────────────────────────────────────────
+    if (cfg.hop) {
+      this._hopTimer -= dt;
+      if (this._moving && this._hopTimer <= 0 && this._hopOffY <= 0.01) {
+        this._hopVelY = this.type === 'rabbit' ? 4.5 : 2.8;
+        this._hopTimer = this.type === 'rabbit' ? 0.35 : 0.8;
+      }
+      this._hopVelY -= 18 * dt;
+      this._hopOffY = Math.max(0, this._hopOffY + this._hopVelY * dt);
     }
 
     // ── Walk animation ────────────────────────────────────────────────────────
@@ -412,16 +441,17 @@ class Animal {
       p.head.rotation.x = Math.sin(this._walkPh * 2) * 0.06;
     } else if (p.head) {
       p.head.rotation.x *= 0.9;
-      // Gentle idle head look
       p.head.rotation.y = Math.sin(this._phase * this._stagger * 0.1 + 0.5) * 0.2;
     }
 
-    // Idle body sway
-    if (!this._moving) {
-      this._group.position.y = this.homePos.y + Math.sin(this._phase * 0.8 + this._stagger) * 0.012;
-    } else {
+    // ── Final Y position ──────────────────────────────────────────────────────
+    if (cfg.hop) {
       this._group.position.y = this.homePos.y + this._hopOffY;
+    } else if (!cfg.swim && this._velY === 0 && !this._moving) {
+      // Idle body sway only when grounded and still
+      this._group.position.y = this.homePos.y + Math.sin(this._phase * 0.8 + this._stagger) * 0.012;
     }
+    // else: gravity code already set group.position.y
 
     this.pos.copy(this._group.position);
     return false;

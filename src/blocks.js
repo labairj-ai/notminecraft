@@ -172,6 +172,7 @@ export const ITEM_DEFS = {
 // ── Block drop overrides (id → drop instead of the block itself) ───────────────
 // Used when mining returns a different item than the block placed.
 export const BLOCK_DROPS = {
+  [GRASS]:       { id: DIRT,       count: 1 },
   [COAL_ORE]:    { id: COAL,       count: 1 },
   [IRON_ORE]:    { id: IRON_INGOT, count: 1 },
   [GOLD_ORE]:    { id: GOLD_INGOT, count: 1 },

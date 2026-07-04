@@ -201,11 +201,13 @@ export class Player {
       return;
     }
 
-    // Right-click DOOR_CLOSED → open (both this block and the one above)
+    // Right-click DOOR_CLOSED → open both halves at once
     if (targetId === B.DOOR_CLOSED) {
       this.world.setBlock(wx, wy, wz, B.DOOR_OPEN);
       if (this.world.getBlock(wx, wy + 1, wz) === B.DOOR_CLOSED)
         this.world.setBlock(wx, wy + 1, wz, B.DOOR_OPEN);
+      if (this.world.getBlock(wx, wy - 1, wz) === B.DOOR_CLOSED)
+        this.world.setBlock(wx, wy - 1, wz, B.DOOR_OPEN);
       return;
     }
 
@@ -352,6 +354,10 @@ export class Player {
       if (this.world.getBlock(bx, Math.floor(this.pos.y),       bz) === B.ESCALATOR_UP ||
           this.world.getBlock(bx, Math.floor(this.pos.y + 0.9), bz) === B.ESCALATOR_UP) {
         this.vel.y = 5.5;
+        // Snap player to block center so the 0.3-unit body radius doesn't
+        // overlap adjacent floor slabs (PLANKS at upper floor level)
+        this.pos.x = bx + 0.5;
+        this.pos.z = bz + 0.5;
       }
     }
 
