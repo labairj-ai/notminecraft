@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as B from './blocks.js';
 import { getToolAction, BLOCK_DROPS } from './blocks.js';
+import { VEHICLE_TYPES } from './car.js';
 
 const GRAVITY    = 28;
 const JUMP_VEL   = 9;
@@ -121,8 +122,8 @@ export class Player {
 
   _bindInput() {
     document.addEventListener('keydown', e => {
-      if (!this.active) return;
       this.keys[e.code] = true;
+      if (!this.active) return;
 
       if (e.code === 'KeyG') {
         this.flying = !this.flying;
@@ -238,7 +239,8 @@ export class Player {
       if (slot?.id === B.VEHICLE && targetId === B.ASPHALT) {
         const spawnY = wy + 1.26;
         const heading = Math.round(this.yaw / (Math.PI / 2)) * (Math.PI / 2);
-        this.world.cars.deployAt(this.world.scene, wx + 0.5, spawnY, wz + 0.5, heading);
+        const vt = VEHICLE_TYPES[Math.floor(Math.random() * VEHICLE_TYPES.length)];
+        this.world.cars.deployAt(this.world.scene, wx + 0.5, spawnY, wz + 0.5, heading, vt);
         slot.count--;
         if (slot.count === 0) this.hotbar[this.selectedSlot] = null;
         return;

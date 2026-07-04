@@ -3,9 +3,9 @@ import { createNoise2D, createNoise3D } from 'simplex-noise';
 import { Chunk } from './chunk.js';
 import { createAtlas } from './textures.js';
 import { CHUNK_SIZE, CHUNK_HEIGHT, SEA_LEVEL } from './terrain.js';
-import { getCityInfo, getChunkNPCSpawns, getChunkCarSpawns, getChunkShopkeeperSpawns } from './city.js';
+import { getCityInfo, getChunkNPCSpawns, getChunkCarSpawns, getChunkShopkeeperSpawns, getChunkBusStopSpawns } from './city.js';
 import { NPCManager } from './npc.js';
-import { CarManager } from './car.js';
+import { CarManager, BusStopManager } from './car.js';
 import { TrafficManager, getChunkTrafficSpawns } from './traffic.js';
 import { AnimalManager, getChunkAnimalSpawns } from './animals.js';
 import * as B from './blocks.js';
@@ -46,10 +46,11 @@ export class World {
     });
 
     this._pendingBuilds = [];
-    this.npcs    = new NPCManager(scene, this);
-    this.cars    = new CarManager(scene);
-    this.traffic = new TrafficManager(scene);
-    this.animals = new AnimalManager(scene, this);
+    this.npcs     = new NPCManager(scene, this);
+    this.cars     = new CarManager(scene);
+    this.busStops = new BusStopManager(scene);
+    this.traffic  = new TrafficManager(scene);
+    this.animals  = new AnimalManager(scene, this);
   }
 
   cityInfo(wx, wz) { return getCityInfo(wx, wz, this.seed); }
@@ -146,6 +147,9 @@ export class World {
           const animalSpawns = getChunkAnimalSpawns(c, this.seed,
             (wx, wz) => this.cityInfo(wx, wz));
           this.animals.spawnForChunk(k, animalSpawns);
+          const busStopSpawns = getChunkBusStopSpawns(cx, cz, this.seed,
+            (wx, wz) => this.cityInfo(wx, wz));
+          this.busStops.spawnForChunk(k, busStopSpawns);
         }
       }
     }
@@ -158,6 +162,7 @@ export class World {
         this.npcs.despawnChunk(k);
         this.npcs.despawnChunk(k + ':shop');
         this.cars.despawnChunk(k);
+        this.busStops.despawnChunk(k);
         this.traffic.despawnChunk(k);
         this.animals.despawnChunk(k);
         chunk.dispose();

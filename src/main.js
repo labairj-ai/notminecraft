@@ -6,6 +6,8 @@ import { FirstPersonHand } from './hand.js';
 import * as B from './blocks.js';
 import { BLOCK_DEFS, getToolAction } from './blocks.js';
 import { Minimap } from './minimap.js';
+import { getCityInfo, CITY_SPACING } from './city.js';
+import { VEHICLE_TYPES } from './car.js';
 
 // ── Renderer ──────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('game-canvas');
@@ -298,13 +300,20 @@ document.addEventListener('keydown', e => {
     ui.closeInventory();
     return;
   }
-  // F = interact with nearby NPC
+  // F = bus stop or NPC
   if (e.code === 'KeyF' && gameState === 'playing') {
+    const nearBusStop = world.busStops.getNearest(player.pos, 3);
+    if (nearBusStop) { openBusPanel(nearBusStop); return; }
     const npc = world.npcs.getNearest(player.pos, 4);
     if (npc) { openDialog(npc); }
     return;
   }
-  if (e.code === 'KeyF' && (gameState === 'dialog' || gameState === 'shop')) {
+  if (e.code === 'KeyF' && gameState === 'dialog') {
+    if (_busPanel) { closeBusPanel(); return; }
+    closeDialogOrShop();
+    return;
+  }
+  if (e.code === 'KeyF' && gameState === 'shop') {
     closeDialogOrShop();
     return;
   }
@@ -469,6 +478,115 @@ window.__openShopkeeperDialog = (role) => {
   return 'none';
 };
 
+// ── Bus route panel ───────────────────────────────────────────────────────────
+let _busPanel = null;
+
+function findNearbyVillages(currentCityX, currentCityZ, worldInfoFn) {
+  const dirs = [
+    [1,0,'E'], [-1,0,'W'], [0,1,'S'], [0,-1,'N'],
+    [1,1,'SE'], [-1,1,'SW'], [1,-1,'NE'], [-1,-1,'NW'],
+  ];
+  const results = [];
+  const seen = new Set();
+  for (const [dx, dz, label] of dirs) {
+    for (let n = 1; n <= 2 && results.length < 4; n++) {
+      const tx = currentCityX + dx * CITY_SPACING * n;
+      const tz = currentCityZ + dz * CITY_SPACING * n;
+      const ci = worldInfoFn(tx, tz);
+      if (!ci) continue;
+      const key = `${Math.round(ci.centerX)},${Math.round(ci.centerZ)}`;
+      if (seen.has(key)) continue;
+      if (Math.round(ci.centerX) === Math.round(currentCityX) &&
+          Math.round(ci.centerZ) === Math.round(currentCityZ)) continue;
+      seen.add(key);
+      const dist = Math.round(Math.sqrt(
+        (ci.centerX - currentCityX) ** 2 + (ci.centerZ - currentCityZ) ** 2
+      ));
+      results.push({ label: `Village (${label}, ${dist}m)`, x: ci.centerX, z: ci.centerZ });
+      if (results.length >= 4) break;
+    }
+    if (results.length >= 4) break;
+  }
+  return results;
+}
+
+function openBusPanel(stopData) {
+  closeBusPanel();
+  gameState = 'dialog'; // reuse dialog state to keep pointer unlocked
+  document.exitPointerLock();
+
+  const panel = document.createElement('div');
+  panel.id = 'bus-route-panel';
+  panel.style.cssText = [
+    'position:fixed','top:50%','left:50%',
+    'transform:translate(-50%,-50%)',
+    'background:#1e3a5f','color:#fff',
+    'border:3px solid #d4af37','border-radius:8px',
+    'padding:24px 32px','min-width:300px',
+    'font-family:sans-serif','z-index:1000',
+    'display:flex','flex-direction:column','gap:12px',
+  ].join(';');
+
+  const title = document.createElement('h2');
+  title.textContent = 'Bus Routes';
+  title.style.cssText = 'margin:0;font-size:1.4em;color:#fbbf24;text-align:center;';
+  panel.appendChild(title);
+
+  const worldInfoFn = (wx, wz) => getCityInfo(wx, wz, world.seed);
+  const destinations = findNearbyVillages(stopData.cityX, stopData.cityZ, worldInfoFn);
+
+  if (destinations.length === 0) {
+    const msg = document.createElement('p');
+    msg.textContent = 'No nearby villages found.';
+    msg.style.textAlign = 'center';
+    panel.appendChild(msg);
+  }
+
+  for (const dest of destinations) {
+    const btn = document.createElement('button');
+    btn.textContent = dest.label;
+    btn.style.cssText = [
+      'padding:10px 16px','background:#0f766e','color:#fff',
+      'border:none','border-radius:5px','cursor:pointer',
+      'font-size:1em',
+    ].join(';');
+    btn.addEventListener('click', () => {
+      closeBusPanel();
+      gameState = 'playing';
+      document.getElementById('npc-hint').classList.add('hidden');
+      player.pos.set(dest.x, 40, dest.z);
+      player.vel.set(0, 0, 0);
+      world.update(dest.x, dest.z);
+      lockPointer();
+    });
+    panel.appendChild(btn);
+  }
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Close [F]';
+  closeBtn.style.cssText = [
+    'padding:8px 16px','background:#374151','color:#fff',
+    'border:none','border-radius:5px','cursor:pointer',
+    'font-size:0.9em','margin-top:4px',
+  ].join(';');
+  closeBtn.addEventListener('click', closeBusPanel);
+  panel.appendChild(closeBtn);
+
+  document.body.appendChild(panel);
+  _busPanel = panel;
+}
+
+function closeBusPanel() {
+  if (_busPanel) {
+    _busPanel.remove();
+    _busPanel = null;
+  }
+  if (gameState === 'dialog') {
+    gameState = 'playing';
+    lockPointer();
+  }
+}
+
 // ── Start game ────────────────────────────────────────────────────────────────
 function startGame() {
   document.getElementById('menu-screen').classList.add('hidden');
@@ -511,8 +629,13 @@ function loop(now) {
     world.update(activeCar.pos.x, activeCar.pos.z);
 
     // Drive camera: behind and above the car
+    const _vt = activeCar.vehicleType;
+    const _camBack = (_vt === 'motorcycle') ? -3.5
+      : (_vt === 'bus' || _vt === 'limo') ? -7.5
+      : (_vt === 'monster_truck') ? -6.0
+      : -5.5;
     const fwd = new THREE.Vector3(Math.sin(activeCar.heading), 0, Math.cos(activeCar.heading));
-    _driveCamOffset.copy(activeCar.pos).addScaledVector(fwd, -5.5).setY(activeCar.pos.y + 2.8);
+    _driveCamOffset.copy(activeCar.pos).addScaledVector(fwd, _camBack).setY(activeCar.pos.y + 2.8);
     camera.position.lerp(_driveCamOffset, Math.min(1, dt * 10));
     _driveLookAt.copy(activeCar.pos).addScaledVector(fwd, 3).setY(activeCar.pos.y + 0.8);
     camera.lookAt(_driveLookAt);
@@ -532,8 +655,12 @@ function loop(now) {
     const npcHint = document.getElementById('npc-hint');
     const nearNPC = world.npcs.getNearest(player.pos, 4);
     const nearCarHint = world.cars.getNearest(player.pos, 3.5);
+    const nearBusStopHint = world.busStops.getNearest(player.pos, 3);
     if (nearCarHint && !nearCarHint.occupied) {
       npcHint.textContent = 'Press E to enter car';
+      npcHint.classList.remove('hidden');
+    } else if (nearBusStopHint) {
+      npcHint.textContent = 'Press F for bus routes';
       npcHint.classList.remove('hidden');
     } else if (nearNPC) {
       npcHint.textContent = 'Press F to talk';

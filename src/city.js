@@ -208,6 +208,8 @@ export function getChunkNPCSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
   return spawns;
 }
 
+const CAR_TYPES = ['car','car','car','car','truck','truck','monster_truck','limo','motorcycle','motorcycle','bus','dog_car'];
+
 // ── Public: car spawn points for a chunk ─────────────────────────────────────
 export function getChunkCarSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
   const SIZE = 16;
@@ -249,7 +251,42 @@ export function getChunkCarSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
       wz: wz + 0.5,
       heading,
       seed: Math.floor(worldSeed + wx * 5003 + wz * 7411 + i),
+      vehicleType: CAR_TYPES[Math.floor(pr() * CAR_TYPES.length)],
     });
+  }
+
+  return spawns;
+}
+
+// ── Public: bus stop spawn points for a chunk ────────────────────────────────
+export function getChunkBusStopSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
+  const SIZE = 16;
+  const spawns = [];
+  const seen   = new Set();
+
+  for (let lx = 0; lx < SIZE; lx++) {
+    for (let lz = 0; lz < SIZE; lz++) {
+      const wx = chunkX * SIZE + lx;
+      const wz = chunkZ * SIZE + lz;
+      const city = cityInfoFn(wx, wz);
+      if (!city) continue;
+
+      const px = mod(Math.floor(city.localX), STREET_PERIOD);
+      const pz = mod(Math.floor(city.localZ), STREET_PERIOD);
+
+      // Must be in a Z-corridor outer sidewalk: px < STREET_WIDTH, pz >= STREET_WIDTH, px === 1
+      if (!(px < STREET_WIDTH && pz >= STREET_WIDTH && px === 1)) continue;
+      // Middle of building-facing plot row
+      if ((pz - STREET_WIDTH) !== 7) continue;
+      // Every other plot
+      if (Math.floor(city.localZ / STREET_PERIOD) % 2 !== 0) continue;
+
+      const key = `bs:${wx},${wz}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      spawns.push({ wx: wx + 0.5, wz: wz + 0.5, cityX: city.centerX, cityZ: city.centerZ });
+    }
   }
 
   return spawns;
