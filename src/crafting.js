@@ -277,6 +277,18 @@ export const RECIPES = [
   { size: 3, rows: [[IRON_INGOT, GLASS, IRON_INGOT], [GLASS, GLOWSTONE, GLASS], [IRON_INGOT, GLASS, IRON_INGOT]],
     result: { id: LANTERN, count: 2 } },
 
+  // Lantern (simple): iron-torch-iron vertical strip → 1 lantern
+  //  I
+  //  T
+  //  I
+  { size: 2, rows: [[IRON_INGOT], [TORCH], [IRON_INGOT]],
+    result: { id: LANTERN, count: 1 } },
+
+  // Lamp block: iron-coal-iron horizontal strip → 2 lamp blocks
+  //  I C I
+  { size: 2, rows: [[IRON_INGOT, COAL, IRON_INGOT]],
+    result: { id: LAMP, count: 2 } },
+
   // ── Gold tools (2× faster mining, 3 damage for sword) ─────────────────────
 
   // Gold pickaxe: GGG / _S_ / _S_

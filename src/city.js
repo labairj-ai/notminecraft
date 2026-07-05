@@ -318,6 +318,56 @@ export function getChunkBusStopSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
   return spawns;
 }
 
+// ── Public: streetlight spawn points for a chunk ─────────────────────────────
+// Places one light per intersection corner (px=1, pz=1) and one midblock on
+// each sidewalk corridor, with arm angle oriented toward the nearest road.
+export function getChunkStreetlightSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
+  const SIZE = 16;
+  const spawns = [];
+  const seen   = new Set();
+
+  for (let lx = 0; lx < SIZE; lx++) {
+    for (let lz = 0; lz < SIZE; lz++) {
+      const wx = chunkX * SIZE + lx;
+      const wz = chunkZ * SIZE + lz;
+      const city = cityInfoFn(wx, wz);
+      if (!city) continue;
+
+      const px = mod(Math.floor(city.localX), STREET_PERIOD);
+      const pz = mod(Math.floor(city.localZ), STREET_PERIOD);
+
+      // Intersection corner — arm at 45° toward both roads (+X, +Z)
+      if (px === 1 && pz === 1) {
+        const key = `sl:${wx},${wz}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          spawns.push({ wx: wx + 0.5, wz: wz + 0.5, angle: Math.PI / 4 });
+        }
+      }
+
+      // Midblock on X-corridor sidewalk (px=1) — arm faces +X toward the road
+      if (px === 1 && pz === STREET_WIDTH + 5) {
+        const key = `slx:${wx},${wz}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          spawns.push({ wx: wx + 0.5, wz: wz + 0.5, angle: Math.PI / 2 });
+        }
+      }
+
+      // Midblock on Z-corridor sidewalk (pz=1) — arm faces +Z toward the road
+      if (pz === 1 && px === STREET_WIDTH + 5) {
+        const key = `slz:${wx},${wz}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          spawns.push({ wx: wx + 0.5, wz: wz + 0.5, angle: 0 });
+        }
+      }
+    }
+  }
+
+  return spawns;
+}
+
 // ── Public: shopkeeper spawn points for a chunk ───────────────────────────────
 export function getChunkShopkeeperSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
   const SIZE = 16;

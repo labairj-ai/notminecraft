@@ -3,9 +3,10 @@ import { createNoise2D, createNoise3D } from 'simplex-noise';
 import { Chunk } from './chunk.js';
 import { createAtlas } from './textures.js';
 import { CHUNK_SIZE, CHUNK_HEIGHT, SEA_LEVEL } from './terrain.js';
-import { getCityInfo, getChunkNPCSpawns, getChunkCarSpawns, getChunkShopkeeperSpawns, getChunkBusStopSpawns, getNearestCityCenter, CITY_BASE_Y } from './city.js';
+import { getCityInfo, getChunkNPCSpawns, getChunkCarSpawns, getChunkShopkeeperSpawns, getChunkBusStopSpawns, getChunkStreetlightSpawns, getNearestCityCenter, CITY_BASE_Y } from './city.js';
 import { NPCManager } from './npc.js';
 import { CarManager, BusStopManager } from './car.js';
+import { StreetlightManager } from './streetlight.js';
 import { TrafficManager, getChunkTrafficSpawns } from './traffic.js';
 import { AnimalManager, getChunkAnimalSpawns } from './animals.js';
 import { HostileManager } from './hostiles.js';
@@ -47,12 +48,13 @@ export class World {
     });
 
     this._pendingBuilds = new Set();
-    this.npcs     = new NPCManager(scene, this);
-    this.cars     = new CarManager(scene);
-    this.busStops = new BusStopManager(scene);
-    this.traffic  = new TrafficManager(scene);
-    this.animals  = new AnimalManager(scene, this);
-    this.hostiles = new HostileManager(scene, this);
+    this.npcs        = new NPCManager(scene, this);
+    this.cars        = new CarManager(scene);
+    this.busStops    = new BusStopManager(scene);
+    this.streetlights = new StreetlightManager(scene);
+    this.traffic     = new TrafficManager(scene);
+    this.animals     = new AnimalManager(scene, this);
+    this.hostiles    = new HostileManager(scene, this);
   }
 
   cityInfo(wx, wz) { return getCityInfo(wx, wz, this.seed); }
@@ -150,6 +152,9 @@ export class World {
           const busStopSpawns = getChunkBusStopSpawns(cx, cz, this.seed,
             (wx, wz) => this.cityInfo(wx, wz));
           this.busStops.spawnForChunk(k, busStopSpawns);
+          const slSpawns = getChunkStreetlightSpawns(cx, cz, this.seed,
+            (wx, wz) => this.cityInfo(wx, wz));
+          this.streetlights.spawnForChunk(k, slSpawns);
         }
       }
     }
@@ -163,6 +168,7 @@ export class World {
         this.npcs.despawnChunk(k + ':shop');
         this.cars.despawnChunk(k);
         this.busStops.despawnChunk(k);
+        this.streetlights.despawnChunk(k);
         this.traffic.despawnChunk(k);
         this.animals.despawnChunk(k);
         chunk.dispose();
