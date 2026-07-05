@@ -11,38 +11,27 @@ const SENS = 0.004;  // look sensitivity (rad / px)
 const JR   = 52;     // max joystick stick displacement (px)
 const DEAD = 10;     // deadzone (px)
 
-function mk(tag, css, text) {
+function mk(tag, cls, text) {
   const e = document.createElement(tag);
-  if (css)             e.style.cssText = css;
-  if (text !== void 0) e.textContent   = text;
+  if (cls)              e.className  = cls;
+  if (text !== void 0)  e.textContent = text;
   return e;
 }
 
-function btn(label, bg, size = 60) {
-  return mk('div', [
-    `background:${bg}cc`, 'color:#fff',
-    `width:${size}px`, `height:${size}px`,
-    'border-radius:50%',
-    'display:flex', 'align-items:center', 'justify-content:center',
-    'font-size:1.2em', 'font-weight:700',
-    'border:2px solid rgba(255,255,255,0.3)',
-    'pointer-events:auto', 'touch-action:none',
-    'user-select:none', '-webkit-user-select:none',
-    'box-shadow:0 3px 10px rgba(0,0,0,0.5)',
-  ].join(';'), label);
+// Create a circular button using CSS classes for responsive sizing
+function mcBtn(label, bg, sizeClass = 'mc-btn-md') {
+  const e = mk('div', `mc-btn ${sizeClass}`);
+  e.style.background = bg + 'cc';
+  e.textContent = label;
+  return e;
 }
 
-function pill(label, bg) {
-  return mk('div', [
-    `background:${bg}cc`, 'color:#fff',
-    'height:44px', 'padding:0 16px', 'border-radius:22px',
-    'display:flex', 'align-items:center', 'justify-content:center',
-    'font-size:0.95em', 'font-weight:700', 'white-space:nowrap',
-    'border:2px solid rgba(255,255,255,0.3)',
-    'pointer-events:auto', 'touch-action:none',
-    'user-select:none', '-webkit-user-select:none',
-    'box-shadow:0 3px 10px rgba(0,0,0,0.5)',
-  ].join(';'), label);
+// Create a pill-shaped button
+function mcPill(label, bg) {
+  const e = mk('div', 'mc-pill');
+  e.style.background = bg + 'cc';
+  e.textContent = label;
+  return e;
 }
 
 export class MobileControls {
@@ -57,129 +46,81 @@ export class MobileControls {
     this._jCX       = 0;
     this._jCY       = 0;
     this._isDriving = false;
+    this._moreOpen  = false;
 
     this._buildDOM();
     this._bindEvents();
   }
 
   _buildDOM() {
-    const root = mk('div', [
-      'position:fixed', 'inset:0', 'z-index:500',
-      'pointer-events:none', 'touch-action:none',
-      'display:none',
-    ].join(';'));
+    const root = mk('div', 'mc-root');
+    root.style.display = 'none';
     this._root = root;
 
     // Left 45% → joystick zone
-    const lz = mk('div', [
-      'position:absolute', 'top:0', 'left:0',
-      'width:45%', 'height:100%',
-      'pointer-events:auto', 'touch-action:none',
-    ].join(';'));
+    const lz = mk('div', 'mc-zone mc-zone-left');
     root.appendChild(lz);
     this._lz = lz;
 
     // Right 55% → look zone
-    const rz = mk('div', [
-      'position:absolute', 'top:0', 'right:0',
-      'width:55%', 'height:100%',
-      'pointer-events:auto', 'touch-action:none',
-    ].join(';'));
+    const rz = mk('div', 'mc-zone mc-zone-right');
     root.appendChild(rz);
     this._rz = rz;
 
-    // Dynamic joystick
-    const jBase = mk('div', [
-      'position:absolute', 'pointer-events:none', 'display:none',
-      'width:120px', 'height:120px', 'border-radius:50%',
-      'background:rgba(255,255,255,0.1)',
-      'border:2px solid rgba(255,255,255,0.35)',
-      'transform:translate(-50%,-50%)',
-    ].join(';'));
-    const jKnob = mk('div', [
-      'position:absolute', 'width:54px', 'height:54px',
-      'border-radius:50%', 'background:rgba(255,255,255,0.5)',
-      'top:50%', 'left:50%', 'transform:translate(-50%,-50%)',
-      'box-shadow:0 2px 8px rgba(0,0,0,0.4)',
-    ].join(';'));
+    // Dynamic joystick visuals
+    const jBase = mk('div', 'mc-joystick-base');
+    const jKnob = mk('div', 'mc-joystick-knob');
     jBase.appendChild(jKnob);
     root.appendChild(jBase);
     this._jBase = jBase;
     this._jKnob = jKnob;
 
-    // ── Top-left: pause ───────────────────────────────────────────────────────
-    this._pauseBtn = mk('div', [
-      'position:absolute', 'top:16px', 'left:16px', 'z-index:1',
-      'background:rgba(0,0,0,0.45)', 'color:#fff',
-      'width:46px', 'height:46px', 'border-radius:8px',
-      'display:flex', 'align-items:center', 'justify-content:center',
-      'font-size:1.3em',
-      'border:1px solid rgba(255,255,255,0.25)',
-      'pointer-events:auto', 'touch-action:none',
-      'user-select:none', '-webkit-user-select:none',
-    ].join(';'), '⏸');
+    // ── Pause button (top-left) ───────────────────────────────────────────────
+    this._pauseBtn = mk('div', 'mc-pause-btn', '⏸');
     root.appendChild(this._pauseBtn);
 
-    // ── Bottom-right action panel ─────────────────────────────────────────────
-    const br = mk('div', [
-      'position:absolute', 'bottom:24px', 'right:16px', 'z-index:1',
-      'display:flex', 'flex-direction:column', 'gap:10px',
-      'align-items:flex-end', 'pointer-events:none',
-    ].join(';'));
-
-    // Row 1 — toggles: Sprint | FLY/LAND | F | Inv+Craft
-    const r1 = mk('div', 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;');
-    this._sprintBtn = btn('⚡', '#b45309', 46);
-    this._flyBtn    = pill('🛸 FLY', '#7c3aed');
-    this._fBtn      = btn('F',  '#0f766e', 46);
-
-    // Two-line button: makes inventory + crafting discoverable
-    this._invBtn = mk('div', [
-      'background:#0369a1cc', 'color:#fff',
-      'width:72px', 'height:50px', 'border-radius:12px',
-      'display:flex', 'flex-direction:column',
-      'align-items:center', 'justify-content:center',
-      'font-size:0.82em', 'font-weight:700', 'line-height:1.25',
-      'border:2px solid rgba(255,255,255,0.3)',
-      'pointer-events:auto', 'touch-action:none',
-      'user-select:none', '-webkit-user-select:none',
-      'box-shadow:0 3px 10px rgba(0,0,0,0.5)',
-    ].join(';'));
-    this._invBtn.innerHTML = '🎒 INV<br><span style="font-size:0.82em;opacity:0.85">CRAFT</span>';
-
-    r1.appendChild(this._sprintBtn);
-    r1.appendChild(this._flyBtn);
-    r1.appendChild(this._fBtn);
-    r1.appendChild(this._invBtn);
-
-    // Row 2 — actions: Up (jump/fly↑) | Down (fly↓) | Break | Place
-    const r2 = mk('div', 'display:flex;gap:8px;align-items:center;');
-    this._upBtn    = btn('↑',  '#15803d', 68);
-    this._downBtn  = btn('↓',  '#1e3a5f', 56);
-    this._breakBtn = btn('⛏', '#dc2626', 58);
-    this._placeBtn = btn('▣',  '#1d4ed8', 58);
-    r2.appendChild(this._upBtn);
-    r2.appendChild(this._downBtn);
-    r2.appendChild(this._breakBtn);
-    r2.appendChild(this._placeBtn);
-
-    br.appendChild(r1);
-    br.appendChild(r2);
-    root.appendChild(br);
-
-    // ── Exit-car button (driving only) ────────────────────────────────────────
-    this._exitBtn = mk('div', [
-      'position:absolute', 'top:16px', 'left:50%', 'z-index:1',
-      'transform:translateX(-50%)',
-      'background:#dc2626cc', 'color:#fff',
-      'padding:12px 28px', 'border-radius:8px',
-      'font-weight:bold', 'font-size:1.1em',
-      'border:2px solid rgba(255,255,255,0.3)',
-      'pointer-events:auto', 'touch-action:none',
-      'display:none', 'box-shadow:0 2px 8px rgba(0,0,0,0.5)',
-      'user-select:none', '-webkit-user-select:none',
-    ].join(';'), 'EXIT CAR');
+    // ── Exit-car button (driving only, top-center) ────────────────────────────
+    this._exitBtn = mk('div', 'mc-exit-btn', 'EXIT CAR');
+    this._exitBtn.style.display = 'none';
     root.appendChild(this._exitBtn);
+
+    // ── Action panel (bottom-right) ───────────────────────────────────────────
+    const panel = mk('div', 'mc-action-panel');
+
+    // Secondary tray — revealed by ⋯ button (Sprint + Fly-Down)
+    const sec = mk('div', 'mc-row mc-secondary');
+    this._downBtn   = mcBtn('↓', '#1e3a5f', 'mc-btn-sm');
+    this._sprintBtn = mcBtn('⚡', '#b45309', 'mc-btn-sm');
+    sec.appendChild(this._downBtn);
+    sec.appendChild(this._sprintBtn);
+    this._secondary = sec;
+
+    // Fly row — always visible above primary
+    const flyRow = mk('div', 'mc-row');
+    this._flyBtn = mcPill('🛸 FLY', '#7c3aed');
+    flyRow.appendChild(this._flyBtn);
+
+    // Primary row — always visible
+    const primary = mk('div', 'mc-row');
+    this._moreBtn  = mcBtn('⋯', '#374151', 'mc-btn-sm');
+    // INV button (compact two-line pill)
+    this._invBtn = mk('div', 'mc-inv-btn');
+    this._invBtn.style.background = '#0369a1cc';
+    this._invBtn.innerHTML = '🎒<span class="mc-inv-label">INV</span>';
+    this._breakBtn = mcBtn('⛏', '#dc2626', 'mc-btn-md');
+    this._placeBtn = mcBtn('▣', '#1d4ed8', 'mc-btn-md');
+    this._upBtn    = mcBtn('↑', '#15803d', 'mc-btn-lg');
+    primary.appendChild(this._moreBtn);
+    primary.appendChild(this._invBtn);
+    primary.appendChild(this._breakBtn);
+    primary.appendChild(this._placeBtn);
+    primary.appendChild(this._upBtn);
+
+    // Stack: secondary (top, hidden), fly (middle), primary (bottom)
+    panel.appendChild(sec);
+    panel.appendChild(flyRow);
+    panel.appendChild(primary);
+    root.appendChild(panel);
 
     document.body.appendChild(root);
   }
@@ -197,7 +138,7 @@ export class MobileControls {
       this._jCY = t.clientY;
       this._jBase.style.left    = t.clientX + 'px';
       this._jBase.style.top     = t.clientY + 'px';
-      this._jBase.style.display = '';
+      this._jBase.classList.add('visible');
       this._jKnob.style.transform = 'translate(-50%,-50%)';
     }, { passive: false });
 
@@ -229,7 +170,6 @@ export class MobileControls {
           p.keys['KeyW'] = ny < -DEAD;
           p.keys['KeyS'] = ny >  DEAD;
           if (this._isDriving) {
-            // Analog steering: negate so joystick-left = screen-left
             const raw = nx / JR;
             p.keys['_analogSteer'] = Math.abs(nx) > DEAD * 1.5 ? -raw : 0;
             p.keys['KeyA'] = false;
@@ -257,7 +197,7 @@ export class MobileControls {
       for (const t of e.changedTouches) {
         if (t.identifier === this._jId) {
           this._jId = null;
-          this._jBase.style.display = 'none';
+          this._jBase.classList.remove('visible');
           p.keys['KeyW'] = p.keys['KeyS'] = p.keys['KeyA'] = p.keys['KeyD'] = false;
           p.keys['_analogSteer'] = undefined;
         }
@@ -269,13 +209,13 @@ export class MobileControls {
 
     // ── Action buttons ────────────────────────────────────────────────────────
 
-    // ↑ Up: jump when on ground; hold to fly up when flying
+    // ↑ Jump / fly up
     this._upBtn.addEventListener('touchstart', e => {
       e.preventDefault(); e.stopPropagation();
       if (p.flying) {
-        p.keys['Space'] = true;           // player loop: vel.y = FLY_SPEED while held
+        p.keys['Space'] = true;
       } else if (p.onGround) {
-        p.vel.y = 9; p.onGround = false;  // one-shot jump
+        p.vel.y = 9; p.onGround = false;
       }
     }, { passive: false });
     this._upBtn.addEventListener('touchend', e => {
@@ -283,7 +223,7 @@ export class MobileControls {
       p.keys['Space'] = false;
     }, { passive: false });
 
-    // ↓ Down: hold to descend when flying (ControlLeft)
+    // ↓ Fly down
     this._downBtn.addEventListener('touchstart', e => {
       e.preventDefault(); e.stopPropagation();
       p.keys['ControlLeft'] = true;
@@ -303,19 +243,14 @@ export class MobileControls {
 
     this._tap(this._placeBtn, () => p._interact());
 
-    // FLY toggle — label + color change so state is obvious
+    // FLY toggle
     this._tap(this._flyBtn, () => {
       p.flying = !p.flying; p.vel.set(0, 0, 0);
       p.keys['Space'] = false; p.keys['ControlLeft'] = false;
-      if (p.flying) {
-        this._flyBtn.textContent = '🛬 LAND';
-        this._flyBtn.style.background = '#dc2626ec';
-      } else {
-        this._flyBtn.textContent = '🛸 FLY';
-        this._flyBtn.style.background = '#7c3aedcc';
-      }
+      this._updateFlyBtn();
     });
 
+    // Sprint toggle
     this._tap(this._sprintBtn, () => {
       const on = !p.keys['ShiftLeft']; p.keys['ShiftLeft'] = on;
       this._sprintBtn.style.background = on ? '#d97706ec' : '#b45309cc';
@@ -324,9 +259,14 @@ export class MobileControls {
     this._tap(this._invBtn, () =>
       document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', bubbles: true }))
     );
-    this._tap(this._fBtn, () =>
-      document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF', bubbles: true }))
-    );
+
+    // ⋯ more toggle
+    this._tap(this._moreBtn, () => {
+      this._moreOpen = !this._moreOpen;
+      this._secondary.classList.toggle('open', this._moreOpen);
+      this._moreBtn.style.background = this._moreOpen ? '#6b7280cc' : '#374151cc';
+    });
+
     this._tap(this._pauseBtn, () => { if (this.onPause) this.onPause(); });
     this._tap(this._exitBtn,  () => { if (this.onExitCar) this.onExitCar(); });
   }
@@ -337,17 +277,23 @@ export class MobileControls {
     }, { passive: false });
   }
 
+  _updateFlyBtn() {
+    if (this.player.flying) {
+      this._flyBtn.textContent = '🛬 LAND';
+      this._flyBtn.style.background = '#dc2626ec';
+    } else {
+      this._flyBtn.textContent = '🛸 FLY';
+      this._flyBtn.style.background = '#7c3aedcc';
+    }
+  }
+
   // ── State transitions ─────────────────────────────────────────────────────────
   showPlaying() {
     this._root.style.display    = '';
     this._exitBtn.style.display = 'none';
     this._pauseBtn.style.display = '';
     this._isDriving = false;
-    // Reset fly button label in case state changed
-    if (!this.player.flying) {
-      this._flyBtn.textContent = '🛸 FLY';
-      this._flyBtn.style.background = '#7c3aedcc';
-    }
+    this._updateFlyBtn();
     this.player.active = true;
     this.player.keys['KeyW'] = this.player.keys['KeyS'] =
     this.player.keys['KeyA'] = this.player.keys['KeyD'] = false;

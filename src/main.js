@@ -138,8 +138,13 @@ let activeCar = null;  // car currently being driven
 // ── NPC hint element (cached; tap-to-interact on mobile) ──────────────────────
 const _npcHintEl = document.getElementById('npc-hint');
 let   _hintAction = null;  // function to call when hint is tapped on mobile
+// touchstart fires before the look-zone can capture the touch sequence
+_npcHintEl.addEventListener('touchstart', e => {
+  if (_hintAction) { e.preventDefault(); e.stopPropagation(); _hintAction(); }
+}, { passive: false });
+// Fallback for non-touch (desktop pointer)
 _npcHintEl.addEventListener('pointerup', e => {
-  if (IS_MOBILE && _hintAction) { e.preventDefault(); _hintAction(); }
+  if (!IS_MOBILE && _hintAction) { e.preventDefault(); _hintAction(); }
 });
 
 // Driving camera offset (behind and above)
