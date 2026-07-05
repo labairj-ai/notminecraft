@@ -495,41 +495,47 @@ body {
   }
   #shop-status { font-size: 14px; }
 
-  /* Landscape on mobile — tighten further */
-  @media (orientation: landscape) {
-    #npc-hint   { bottom: 120px; font-size: 15px; padding: 10px 24px; }
-    #hotbar     { bottom: 100px; }
-    .slot       { width: 34px; height: 34px; }
-    .slot-icon  { width: 22px; height: 22px; }
-    #hud-bottom { bottom: 82px; }
-    #minimap-wrap { width: 72px; height: 72px; top: 8px; right: 8px; }
-    #minimap      { width: 72px; height: 72px; }
-    #dialog-panel { max-height: 90vh; padding: 16px 16px 20px; }
-    #shop-panel   { max-height: 92vh; padding: 14px 14px 20px; }
+}
 
-    /* Inventory → bottom sheet in landscape */
-    #inventory-screen { align-items: flex-end; }
-    #inventory-panel {
-      width: 100%;
-      max-width: 100%;
-      border-radius: 20px 20px 0 0;
-      border-bottom: none;
-      max-height: 90vh;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-      padding: 10px 10px 14px;
-      box-sizing: border-box;
-    }
-    /* Scale slots down to fit landscape height */
-    .inv-slot               { width: 34px; height: 34px; }
-    .inv-slot canvas        { width: 22px; height: 22px; }
-    .output-slot            { width: 36px; height: 36px; }
-    #inv-main-grid          { grid-template-columns: repeat(9, 36px); gap: 2px; margin-bottom: 2px; }
-    #inv-hotbar-row         { grid-template-columns: repeat(9, 36px); gap: 2px; padding-top: 4px; margin-bottom: 6px; }
-    .craft-grid-cells.size-2 { grid-template-columns: repeat(2, 36px); }
-    .craft-grid-cells.size-3 { grid-template-columns: repeat(3, 36px); }
-    #close-inventory        { width: 100%; padding: 10px; margin-top: 4px; }
+/* ── Mobile landscape — flat query (fixes Android Chrome nested-query bug) ──── */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  #npc-hint     { bottom: 50px;  font-size: 15px; padding: 10px 24px; }
+  #hotbar       { bottom: 6px;   gap: 2px; }
+  .slot         { width: 34px;   height: 34px; }
+  .slot-icon    { width: 22px;   height: 22px; }
+  #hud-bottom   { bottom: 44px; }
+  #minimap-wrap { width: 72px;   height: 72px; top: 8px; right: 8px; }
+  #minimap      { width: 72px;   height: 72px; }
+  #dialog-panel { max-height: 90vh; padding: 16px 16px 20px; }
+  #shop-panel   { max-height: 92vh; padding: 14px 14px 20px; }
+
+  /* Inventory → bottom sheet in landscape */
+  #inventory-screen { align-items: flex-end; }
+  #inventory-panel {
+    width: 100%; max-width: 100%;
+    border-radius: 20px 20px 0 0;
+    border-bottom: none;
+    max-height: 90vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px 10px 14px;
+    box-sizing: border-box;
   }
+  .inv-slot                { width: 34px;  height: 34px; }
+  .inv-slot canvas         { width: 22px;  height: 22px; }
+  .output-slot             { width: 36px;  height: 36px; }
+  #inv-main-grid           { grid-template-columns: repeat(9, 36px); gap: 2px; margin-bottom: 2px; }
+  #inv-hotbar-row          { grid-template-columns: repeat(9, 36px); gap: 2px; padding-top: 4px; margin-bottom: 6px; }
+  .craft-grid-cells.size-2 { grid-template-columns: repeat(2, 36px); }
+  .craft-grid-cells.size-3 { grid-template-columns: repeat(3, 36px); }
+  #close-inventory         { width: 100%; padding: 10px; margin-top: 4px; }
+}
+
+/* ── Mobile portrait — explicit override so rotation never leaves stale values ─ */
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+  #hotbar    { bottom: 130px; gap: 3px; }
+  .slot      { width: 40px;   height: 40px; }
+  .slot-icon { width: 26px;   height: 26px; }
 }
 
 /* Menu */

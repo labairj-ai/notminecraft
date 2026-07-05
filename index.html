@@ -161,5 +161,30 @@
   </div>
 
   <script type="module" src="src/main.js"></script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      const hadController = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.register('/notminecraft/sw.js', {
+        scope: '/notminecraft/',
+        updateViaCache: 'none'
+      }).then(reg => {
+        // Tab was left open across a deploy — new SW is already waiting
+        if (reg.waiting && hadController) {
+          window.location.reload();
+          return;
+        }
+        // New SW found and installed during this session
+        reg.addEventListener('updatefound', () => {
+          const sw = reg.installing;
+          sw.addEventListener('statechange', () => {
+            if (sw.state === 'activated' && hadController) {
+              window.location.reload();
+            }
+          });
+        });
+      });
+    }
+  </script>
 </body>
 </html>
