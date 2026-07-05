@@ -505,6 +505,29 @@ body {
     #minimap      { width: 72px; height: 72px; }
     #dialog-panel { max-height: 90vh; padding: 16px 16px 20px; }
     #shop-panel   { max-height: 92vh; padding: 14px 14px 20px; }
+
+    /* Inventory → bottom sheet in landscape */
+    #inventory-screen { align-items: flex-end; }
+    #inventory-panel {
+      width: 100%;
+      max-width: 100%;
+      border-radius: 20px 20px 0 0;
+      border-bottom: none;
+      max-height: 90vh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 10px 10px 14px;
+      box-sizing: border-box;
+    }
+    /* Scale slots down to fit landscape height */
+    .inv-slot               { width: 34px; height: 34px; }
+    .inv-slot canvas        { width: 22px; height: 22px; }
+    .output-slot            { width: 36px; height: 36px; }
+    #inv-main-grid          { grid-template-columns: repeat(9, 36px); gap: 2px; margin-bottom: 2px; }
+    #inv-hotbar-row         { grid-template-columns: repeat(9, 36px); gap: 2px; padding-top: 4px; margin-bottom: 6px; }
+    .craft-grid-cells.size-2 { grid-template-columns: repeat(2, 36px); }
+    .craft-grid-cells.size-3 { grid-template-columns: repeat(3, 36px); }
+    #close-inventory        { width: 100%; padding: 10px; margin-top: 4px; }
   }
 }
 
@@ -658,6 +681,18 @@ button:hover { background: #5d9c33; }
   padding-top: 6px;
   border-top: 1px solid #444;
   margin-bottom: 14px;
+}
+
+/* ── Inventory hint (tap instructions, touch-only) ────────────────────────── */
+#inv-hint {
+  display: none; /* hidden on desktop */
+  text-align: center;
+  font-size: 11px;
+  color: #888;
+  padding: 4px 0 2px;
+}
+@media (hover: none) and (pointer: coarse) {
+  #inv-hint { display: block; }
 }
 
 /* ── Slot base style (craft cells + inv slots) ─────────────────────────────── */
