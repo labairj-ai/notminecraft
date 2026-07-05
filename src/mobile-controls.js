@@ -51,11 +51,12 @@ export class MobileControls {
     this.onExitCar = null;
     this.onPause   = null;
 
-    this._jId  = null;
-    this._lId  = null;
-    this._ll   = { x: 0, y: 0 };
-    this._jCX  = 0;
-    this._jCY  = 0;
+    this._jId       = null;
+    this._lId       = null;
+    this._ll        = { x: 0, y: 0 };
+    this._jCX       = 0;
+    this._jCY       = 0;
+    this._isDriving = false;
 
     this._buildDOM();
     this._bindEvents();
@@ -213,8 +214,17 @@ export class MobileControls {
             `translate(calc(-50% + ${nx}px), calc(-50% + ${ny}px))`;
           p.keys['KeyW'] = ny < -DEAD;
           p.keys['KeyS'] = ny >  DEAD;
-          p.keys['KeyA'] = nx < -DEAD;
-          p.keys['KeyD'] = nx >  DEAD;
+          if (this._isDriving) {
+            // Analog steering: proportional joystick X → steer value, wider dead zone
+            const raw = nx / JR;
+            p.keys['_analogSteer'] = Math.abs(nx) > DEAD * 1.5 ? raw : 0;
+            p.keys['KeyA'] = false;
+            p.keys['KeyD'] = false;
+          } else {
+            p.keys['_analogSteer'] = undefined;
+            p.keys['KeyA'] = nx < -DEAD;
+            p.keys['KeyD'] = nx >  DEAD;
+          }
         }
         if (t.identifier === this._lId) {
           used = true;
@@ -235,6 +245,7 @@ export class MobileControls {
           this._jId = null;
           this._jBase.style.display = 'none';
           p.keys['KeyW'] = p.keys['KeyS'] = p.keys['KeyA'] = p.keys['KeyD'] = false;
+          p.keys['_analogSteer'] = undefined;
         }
         if (t.identifier === this._lId) this._lId = null;
       }
@@ -317,6 +328,7 @@ export class MobileControls {
     this._root.style.display    = '';
     this._exitBtn.style.display = 'none';
     this._pauseBtn.style.display = '';
+    this._isDriving = false;
     // Reset fly button label in case state changed
     if (!this.player.flying) {
       this._flyBtn.textContent = '🛸 FLY';
@@ -328,9 +340,10 @@ export class MobileControls {
   }
 
   showDriving() {
-    this._root.style.display    = '';
-    this._exitBtn.style.display = '';
+    this._root.style.display     = '';
+    this._exitBtn.style.display  = '';
     this._pauseBtn.style.display = 'none';
+    this._isDriving = true;
   }
 
   hide() {

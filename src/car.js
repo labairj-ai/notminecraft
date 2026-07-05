@@ -3,6 +3,10 @@ import { STREET_PERIOD, STREET_WIDTH, SIDEWALK_WIDTH } from './city.js';
 
 function mod(x, n) { return ((x % n) + n) % n; }
 
+// heading rate = steer * speed * STEER_FACTOR → turning radius = 1 / (steer * STEER_FACTOR)
+// 0.28 → ~6.5 block radius at steerMax, city-navigable
+const STEER_FACTOR = 0.28;
+
 function mat(color, extra = {}) {
   return new THREE.MeshLambertMaterial({ color, ...extra });
 }
@@ -37,14 +41,16 @@ export const VEHICLE_TYPES = [
   'dog_car',
 ];
 
+// groundClearance: wheel-bottom offset above surface (matches wheel radius in mesh)
+// hitW/hitL: collision half-extents (width, length) for solid-block checks
 const PHYSICS = {
-  car:           { accel:14, maxSpd:18, drag:3.0, steerMax:0.55, steerRate:1.6, aiSpd:7  },
-  truck:         { accel: 9, maxSpd:14, drag:2.5, steerMax:0.45, steerRate:1.2, aiSpd:5  },
-  monster_truck: { accel:11, maxSpd:16, drag:2.0, steerMax:0.40, steerRate:1.0, aiSpd:5  },
-  limo:          { accel:12, maxSpd:22, drag:2.0, steerMax:0.30, steerRate:0.9, aiSpd:9  },
-  motorcycle:    { accel:18, maxSpd:28, drag:3.5, steerMax:0.70, steerRate:2.2, aiSpd:11 },
-  bus:           { accel: 6, maxSpd:10, drag:1.5, steerMax:0.28, steerRate:0.7, aiSpd:4  },
-  dog_car:       { accel:14, maxSpd:18, drag:3.0, steerMax:0.55, steerRate:1.6, aiSpd:7  },
+  car:           { accel:14, maxSpd:18, drag:3.0, steerMax:0.55, steerRate:1.6, aiSpd:7,  groundClearance:0.26, hitW:0.85, hitL:1.8 },
+  truck:         { accel: 9, maxSpd:14, drag:2.5, steerMax:0.45, steerRate:1.2, aiSpd:5,  groundClearance:0.32, hitW:1.0,  hitL:2.1 },
+  monster_truck: { accel:11, maxSpd:16, drag:2.0, steerMax:0.40, steerRate:1.0, aiSpd:5,  groundClearance:0.78, hitW:1.1,  hitL:2.0 },
+  limo:          { accel:12, maxSpd:22, drag:2.0, steerMax:0.30, steerRate:0.9, aiSpd:9,  groundClearance:0.28, hitW:0.9,  hitL:3.2 },
+  motorcycle:    { accel:18, maxSpd:28, drag:3.5, steerMax:0.70, steerRate:2.2, aiSpd:11, groundClearance:0.34, hitW:0.3,  hitL:0.8 },
+  bus:           { accel: 6, maxSpd:10, drag:1.5, steerMax:0.28, steerRate:0.7, aiSpd:4,  groundClearance:0.36, hitW:1.0,  hitL:2.8 },
+  dog_car:       { accel:14, maxSpd:18, drag:3.0, steerMax:0.55, steerRate:1.6, aiSpd:7,  groundClearance:0.26, hitW:0.85, hitL:1.8 },
 };
 
 // Helper: add a wheel group to parent g, return the group
@@ -272,6 +278,7 @@ export class Car {
     this.heading = heading;
     this.speed   = 0;
     this.steer   = 0;
+    this._velY   = 0;
     this.occupied = false;
     this._scene  = scene;
     this._inIntersection = false;
@@ -295,14 +302,14 @@ export class Car {
     this._wheelRot = 0;
   }
 
-  // Called every frame; keys is null for AI-driven cars
-  update(dt, keys, trafficMgr, cityInfoFn) {
+  // Called every frame; keys is null for AI-driven cars, getBlockFn only for player car
+  update(dt, keys, trafficMgr, cityInfoFn, getBlockFn) {
     if (this.occupied && keys) {
       this._playerUpdate(dt, keys);
     } else if (!this.occupied) {
       this._aiUpdate(dt, trafficMgr, cityInfoFn);
     }
-    this._applyMovement(dt);
+    this._applyMovement(dt, getBlockFn);
     // Keep AI cars on asphalt only
     if (!this.occupied && cityInfoFn) this._constrainToRoad(cityInfoFn);
   }
@@ -351,22 +358,23 @@ export class Car {
       this.speed *= Math.exp(-drag * dt);
       if (Math.abs(this.speed) < 0.05) this.speed = 0;
     }
+
     if (Math.abs(this.speed) > 0.2) {
-      const left  = keys['KeyA'] || keys['ArrowLeft'];
-      const right = keys['KeyD'] || keys['ArrowRight'];
-      if (left)  this.steer -= steerRate * dt;
-      if (right) this.steer += steerRate * dt;
-      if (!left && !right) {
-        // Snap back to centre quickly so the car goes straight on release
-        this.steer *= Math.exp(-14 * dt);
-        if (Math.abs(this.steer) < 0.002) this.steer = 0;
-      }
+      const left   = keys['KeyA'] || keys['ArrowLeft'];
+      const right  = keys['KeyD'] || keys['ArrowRight'];
+      // Mobile analog: joystick X normalised -1..1 → proportional steer
+      const analog = typeof keys['_analogSteer'] === 'number' ? keys['_analogSteer'] : undefined;
+      const target = (analog !== undefined)
+        ? analog * steerMax
+        : (left ? -steerMax : right ? steerMax : 0);
+      const rate   = (Math.abs(target) > 0.02 || left || right) ? steerRate * 8 : 14;
+      this.steer  += (target - this.steer) * Math.min(1, rate * dt);
     } else {
       this.steer *= Math.exp(-8 * dt);
       if (Math.abs(this.steer) < 0.001) this.steer = 0;
     }
     this.steer = Math.max(-steerMax, Math.min(steerMax, this.steer));
-    this.heading += this.steer * this.speed * 0.12 * dt;
+    this.heading += this.steer * this.speed * STEER_FACTOR * dt;
   }
 
   _aiUpdate(dt, trafficMgr, cityInfoFn) {
@@ -420,9 +428,64 @@ export class Car {
     this.speed = Math.min(aiSpd, this.speed + 6 * dt);
   }
 
-  _applyMovement(dt) {
-    this.pos.x += Math.sin(this.heading) * this.speed * dt;
-    this.pos.z += Math.cos(this.heading) * this.speed * dt;
+  // Scan downward to find top of the highest solid block below the car
+  _getSurfaceY(getBlockFn) {
+    const x = Math.floor(this.pos.x);
+    const z = Math.floor(this.pos.z);
+    const top = Math.min(Math.floor(this.pos.y) + 3, 62);
+    for (let y = top; y >= Math.max(0, top - 24); y--) {
+      if (getBlockFn(x, y, z) !== 0) return y + 1;
+    }
+    return Math.floor(this.pos.y);
+  }
+
+  // True if the car footprint at (nx, nz) intersects solid blocks at body height
+  _hitsSolid(nx, nz, getBlockFn) {
+    const { hitW, hitL } = this._physics;
+    const bodyY = Math.floor(this.pos.y);
+    const sh = Math.sin(this.heading);
+    const ch = Math.cos(this.heading);
+    for (const [fl, fr] of [[-hitL, -hitW], [-hitL, hitW], [hitL, -hitW], [hitL, hitW]]) {
+      const bx = Math.floor(nx + sh * fl + ch * fr);
+      const bz = Math.floor(nz + ch * fl - sh * fr);
+      if (getBlockFn(bx, bodyY,     bz) !== 0) return true;
+      if (getBlockFn(bx, bodyY + 1, bz) !== 0) return true;
+    }
+    return false;
+  }
+
+  _applyMovement(dt, getBlockFn) {
+    const dx = Math.sin(this.heading) * this.speed * dt;
+    const dz = Math.cos(this.heading) * this.speed * dt;
+
+    if (getBlockFn) {
+      // Collision: try X and Z independently so the car slides along walls
+      if (!this._hitsSolid(this.pos.x + dx, this.pos.z, getBlockFn)) {
+        this.pos.x += dx;
+      } else {
+        this.speed *= 0.3;
+      }
+      if (!this._hitsSolid(this.pos.x, this.pos.z + dz, getBlockFn)) {
+        this.pos.z += dz;
+      } else {
+        this.speed *= 0.3;
+      }
+
+      // Ground following with gravity
+      const surfY = this._getSurfaceY(getBlockFn) + this._physics.groundClearance;
+      if (this.pos.y > surfY + 0.05) {
+        this._velY -= 30 * dt;
+        this.pos.y += this._velY * dt;
+        if (this.pos.y < surfY) { this.pos.y = surfY; this._velY = 0; }
+      } else {
+        this.pos.y = surfY;
+        this._velY = 0;
+      }
+    } else {
+      this.pos.x += dx;
+      this.pos.z += dz;
+    }
+
     this._group.position.copy(this.pos);
     this._group.rotation.y = this.heading;
 
@@ -497,9 +560,10 @@ export class CarManager {
     }
   }
 
-  update(dt, keys, activeCar, trafficMgr, cityInfoFn) {
+  update(dt, keys, activeCar, trafficMgr, cityInfoFn, getBlockFn) {
     for (const car of this._cars.values()) {
-      car.update(dt, car === activeCar ? keys : null, trafficMgr, cityInfoFn);
+      const isActive = car === activeCar;
+      car.update(dt, isActive ? keys : null, trafficMgr, cityInfoFn, isActive ? getBlockFn : null);
     }
   }
 }

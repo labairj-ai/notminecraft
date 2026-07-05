@@ -661,7 +661,8 @@ function loop(now) {
     world.animals.update(dt, player.pos);
   }
 
-  const _cityInfoFn = (wx, wz) => world.cityInfo(wx, wz);
+  const _cityInfoFn  = (wx, wz)      => world.cityInfo(wx, wz);
+  const _getBlockFn  = (wx, wy, wz)  => world.getBlock(wx, wy, wz);
 
   if (gameState !== 'menu' && gameState !== 'paused') {
     world.traffic.update(dt);
@@ -672,7 +673,7 @@ function loop(now) {
   }
 
   if (gameState === 'driving' && activeCar) {
-    world.cars.update(dt, player.keys, activeCar, world.traffic, _cityInfoFn);
+    world.cars.update(dt, player.keys, activeCar, world.traffic, _cityInfoFn, _getBlockFn);
     // Sync player position to car so chunks load around it
     player.pos.copy(activeCar.pos);
     world.update(activeCar.pos.x, activeCar.pos.z);
