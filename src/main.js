@@ -119,6 +119,17 @@ let mobileControls = null;
 if (IS_MOBILE) {
   mobileControls = new MobileControls(player);
   mobileControls.onExitCar = () => exitCar();
+  mobileControls.onAttack  = () => {
+    if (gameState !== 'playing') return;
+    const toolDef = B.TOOL_DEFS[player.hotbar[player.selectedSlot]?.id];
+    const dmg = toolDef?.damage ?? 1;
+    const npc = world.npcs.getNearest(player.pos, 3.0);
+    if (npc) { npc.takeDamage(dmg); return; }
+    const animal = world.animals.getNearest(player.pos, 3.0);
+    if (animal) { animal.takeDamage(dmg); return; }
+    const hostile = world.hostiles.getNearest(player.pos, 3.0);
+    if (hostile) { hostile.takeDamage(dmg); }
+  };
   mobileControls.onPause   = () => {
     if (gameState !== 'playing') return;
     mobileControls.hide();

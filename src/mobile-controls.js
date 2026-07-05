@@ -39,7 +39,8 @@ export class MobileControls {
     this.player    = player;
     this.onExitCar = null;
     this.onPause   = null;
-    this.onTap     = null; // called when user taps the look zone (interact gesture)
+    this.onTap     = null;    // (tapX, tapY) → interact with visible entity
+    this.onAttack  = null;    // () → attack nearest entity (when no block target)
 
     this._jId       = null;
     this._lId       = null;
@@ -48,6 +49,7 @@ export class MobileControls {
     this._jCY       = 0;
     this._isDriving = false;
     this._moreOpen  = false;
+    this._jMoved    = false;  // true once joystick actually dragged, suppresses tap
     // Tap tracking for both zones — screen coords passed to onTap(x,y)
     this._tapX      = 0;
     this._tapY      = 0;
@@ -141,12 +143,13 @@ export class MobileControls {
       e.preventDefault();
       if (this._jId !== null) return;
       const t   = e.changedTouches[0];
-      this._jId  = t.identifier;
-      this._jCX  = t.clientX;
-      this._jCY  = t.clientY;
-      this._jTapX = t.clientX;
-      this._jTapY = t.clientY;
-      this._jTapT = Date.now();
+      this._jId    = t.identifier;
+      this._jCX    = t.clientX;
+      this._jCY    = t.clientY;
+      this._jTapX  = t.clientX;
+      this._jTapY  = t.clientY;
+      this._jTapT  = Date.now();
+      this._jMoved = false;
       this._jBase.style.left    = t.clientX + 'px';
       this._jBase.style.top     = t.clientY + 'px';
       this._jBase.classList.add('visible');
@@ -174,6 +177,7 @@ export class MobileControls {
       for (const t of e.changedTouches) {
         if (t.identifier === this._jId) {
           used = true;
+          this._jMoved = true; // any movement cancels the tap intent
           const dx  = t.clientX - this._jCX;
           const dy  = t.clientY - this._jCY;
           const len = Math.hypot(dx, dy);
@@ -210,10 +214,10 @@ export class MobileControls {
     const endTouch = e => {
       for (const t of e.changedTouches) {
         if (t.identifier === this._jId) {
-          // Tap on left zone: finger down + up without joystick drag
+          // Tap on left zone: finger barely moved AND no joystick drag occurred
           const jdx = t.clientX - this._jTapX;
           const jdy = t.clientY - this._jTapY;
-          if (this.onTap && Math.hypot(jdx, jdy) < 25 && Date.now() - this._jTapT < 300) {
+          if (this.onTap && !this._jMoved && Math.hypot(jdx, jdy) < 25 && Date.now() - this._jTapT < 300) {
             this.onTap(this._jTapX, this._jTapY);
           }
           this._jId = null;
@@ -261,9 +265,14 @@ export class MobileControls {
       p.keys['ControlLeft'] = false;
     }, { passive: false });
 
-    // Break (hold)
+    // Break (hold) — also attacks entities when not aiming at a block
     this._breakBtn.addEventListener('touchstart', e => {
-      e.preventDefault(); e.stopPropagation(); p._startBreak();
+      e.preventDefault(); e.stopPropagation();
+      if (p.target) {
+        p._startBreak();
+      } else if (this.onAttack) {
+        this.onAttack();
+      }
     }, { passive: false });
     this._breakBtn.addEventListener('touchend', e => {
       e.preventDefault(); p.breakTarget = null; p.breakProgress = 0;
