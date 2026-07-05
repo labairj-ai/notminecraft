@@ -131,6 +131,8 @@ Seven drivable vehicle types, each with a distinct 3D mesh and physics profile:
 - **🛸 FLY / 🛬 LAND** toggle; hold **↑** to fly up, **↓** to fly down
 - Analog steering in vehicles — joystick left = turn left, right = turn right
 - Keyboard shortcut bar hidden on touch devices
+- **Tappable context prompt**: walking near an NPC, vehicle, or bus stop shows a large pulsing button — `💬 Tap to talk`, `🚗 Tap to enter car`, `🚌 Tap for bus routes` — no need to find the F button
+- **NPC dialog and shop** display as full-width bottom sheets with large (50px+) touch targets throughout
 
 ## Tech Stack
 
