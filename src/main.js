@@ -127,8 +127,32 @@ if (IS_MOBILE) {
     document.getElementById('pause-screen').classList.remove('hidden');
     ui.hide();
   };
-  mobileControls.onTap = () => {
+  // Projects a world position to screen pixels; returns {x,y} or null if behind camera.
+  function _toScreen(worldPos) {
+    const v = worldPos.clone();
+    v.project(camera);
+    if (v.z > 1) return null; // behind camera
+    return {
+      x: (v.x *  0.5 + 0.5) * renderer.domElement.clientWidth,
+      y: (v.y * -0.5 + 0.5) * renderer.domElement.clientHeight,
+    };
+  }
+
+  // Returns the best interactive target whose projected screen position is within
+  // `maxPx` pixels of the tap, and within `maxWorld` world-space blocks.
+  function _screenPick(tapX, tapY, worldPos, maxPx, maxWorld, offsetY = 1) {
+    const wd = worldPos.distanceTo(player.pos);
+    if (wd > maxWorld) return false;
+    const wp = worldPos.clone(); wp.y += offsetY;
+    const sc = _toScreen(wp);
+    if (!sc) return false;
+    return Math.hypot(tapX - sc.x, tapY - sc.y) < maxPx;
+  }
+
+  mobileControls.onTap = (tapX, tapY) => {
     if (gameState !== 'playing') return;
+
+    // Fishing rod check (no screen-space needed — just cast if near water)
     const slot = player.hotbar[player.selectedSlot];
     if (slot?.id === B.FISHING_ROD) {
       if (player.startFishing(world)) {
@@ -138,12 +162,45 @@ if (IS_MOBILE) {
         return;
       }
     }
-    const npc = world.npcs.getNearest(player.pos, 4);
-    if (npc) { openDialog(npc); return; }
-    const nearBusStop = world.busStops.getNearest(player.pos, 3);
+
+    const W = renderer.domElement.clientWidth;
+    const H = renderer.domElement.clientHeight;
+    // Tap near screen centre counts for anything within proximity
+    const nearCentre = tapX !== undefined &&
+      Math.hypot(tapX - W / 2, tapY - H / 2) < Math.max(W, H) * 0.6;
+
+    // ── NPC — screen-space pick (180 px) then world-space fallback (8 blocks) ──
+    let bestNPC = null, bestNPCPx = Infinity;
+    for (const npc of world.npcs._npcs.values()) {
+      if (!npc._group) continue;
+      const wd = npc._group.position.distanceTo(player.pos);
+      if (wd > 12) continue;
+      const wp = npc._group.position.clone(); wp.y += 1;
+      const sc = _toScreen(wp);
+      if (!sc) continue;
+      const px = Math.hypot(tapX - sc.x, tapY - sc.y);
+      if (px < 180 && px < bestNPCPx) { bestNPCPx = px; bestNPC = npc; }
+    }
+    if (!bestNPC) bestNPC = world.npcs.getNearest(player.pos, nearCentre ? 8 : 4);
+    if (bestNPC) { openDialog(bestNPC); return; }
+
+    // ── Bus stop ──────────────────────────────────────────────────────────────
+    const nearBusStop = world.busStops.getNearest(player.pos, nearCentre ? 6 : 3);
     if (nearBusStop) { openBusPanel(nearBusStop); return; }
-    const nearbyCar = world.cars.getNearest(player.pos, 3.5);
-    if (nearbyCar && !nearbyCar.occupied) enterCar(nearbyCar);
+
+    // ── Car — screen-space pick (200 px) then world-space fallback ───────────
+    let bestCar = null, bestCarPx = Infinity;
+    for (const car of world.cars._cars.values()) {
+      if (car.occupied) continue;
+      const wd = car.pos.distanceTo(player.pos);
+      if (wd > 15) continue;
+      const sc = _toScreen(car.pos);
+      if (!sc) continue;
+      const px = Math.hypot(tapX - sc.x, tapY - sc.y);
+      if (px < 200 && px < bestCarPx) { bestCarPx = px; bestCar = car; }
+    }
+    if (!bestCar) bestCar = world.cars.getNearest(player.pos, nearCentre ? 8 : 3.5);
+    if (bestCar && !bestCar.occupied) { enterCar(bestCar); return; }
   };
 }
 

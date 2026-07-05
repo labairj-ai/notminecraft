@@ -48,9 +48,13 @@ export class MobileControls {
     this._jCY       = 0;
     this._isDriving = false;
     this._moreOpen  = false;
+    // Tap tracking for both zones — screen coords passed to onTap(x,y)
     this._tapX      = 0;
     this._tapY      = 0;
     this._tapT      = 0;
+    this._jTapX     = 0;
+    this._jTapY     = 0;
+    this._jTapT     = 0;
 
     this._buildDOM();
     this._bindEvents();
@@ -132,14 +136,17 @@ export class MobileControls {
   _bindEvents() {
     const p = this.player;
 
-    // Joystick zone
+    // Joystick zone — also tracks taps (quick lift without dragging joystick)
     this._lz.addEventListener('touchstart', e => {
       e.preventDefault();
       if (this._jId !== null) return;
       const t   = e.changedTouches[0];
-      this._jId = t.identifier;
-      this._jCX = t.clientX;
-      this._jCY = t.clientY;
+      this._jId  = t.identifier;
+      this._jCX  = t.clientX;
+      this._jCY  = t.clientY;
+      this._jTapX = t.clientX;
+      this._jTapY = t.clientY;
+      this._jTapT = Date.now();
       this._jBase.style.left    = t.clientX + 'px';
       this._jBase.style.top     = t.clientY + 'px';
       this._jBase.classList.add('visible');
@@ -203,17 +210,23 @@ export class MobileControls {
     const endTouch = e => {
       for (const t of e.changedTouches) {
         if (t.identifier === this._jId) {
+          // Tap on left zone: finger down + up without joystick drag
+          const jdx = t.clientX - this._jTapX;
+          const jdy = t.clientY - this._jTapY;
+          if (this.onTap && Math.hypot(jdx, jdy) < 25 && Date.now() - this._jTapT < 300) {
+            this.onTap(this._jTapX, this._jTapY);
+          }
           this._jId = null;
           this._jBase.classList.remove('visible');
           p.keys['KeyW'] = p.keys['KeyS'] = p.keys['KeyA'] = p.keys['KeyD'] = false;
           p.keys['_analogSteer'] = undefined;
         }
         if (t.identifier === this._lId) {
-          // Detect tap: finger barely moved and lifted quickly
+          // Tap on right zone: finger down + up without camera drag
           const dx = t.clientX - this._tapX;
           const dy = t.clientY - this._tapY;
-          if (this.onTap && Math.hypot(dx, dy) < 18 && Date.now() - this._tapT < 260) {
-            this.onTap();
+          if (this.onTap && Math.hypot(dx, dy) < 25 && Date.now() - this._tapT < 300) {
+            this.onTap(this._tapX, this._tapY);
           }
           this._lId = null;
         }
