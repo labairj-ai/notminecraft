@@ -330,17 +330,16 @@ export class UI {
     });
 
     // Compute recipe output
-    const gridIds = this.player.craftGrid
-      .slice(0, size * size)
-      .map(s => s?.id ?? null);
-    this._craftResult = matchRecipe(gridIds, size);
+    const gridSlots = this.player.craftGrid.slice(0, size * size);
+    this._craftResult = matchRecipe(gridSlots, size);
     const outCanvas = this.craftOutput.querySelector('canvas');
-    drawIcon(outCanvas, this._craftResult?.id, this._craftResult?.count);
+    drawIcon(outCanvas, this._craftResult?.result?.id, this._craftResult?.result?.count);
     this.craftOutput.classList.toggle('has-result', !!this._craftResult);
 
     // Recipe hint
     if (this._craftResult) {
-      this.craftHint.textContent = `→ ${getItemName(this._craftResult.id)} ×${this._craftResult.count}`;
+      const { id, count } = this._craftResult.result;
+      this.craftHint.textContent = `→ ${getItemName(id)} ×${count}`;
     } else {
       this.craftHint.textContent = '';
     }
@@ -417,18 +416,18 @@ export class UI {
 
   _onOutputClick() {
     if (!this._craftResult) return;
-    const { id, count } = this._craftResult;
+    const { result, consume } = this._craftResult;
+    const { id, count } = result;
 
-    // Check inventory has space
-    const size    = this.player.craftGridSize;
-    const total   = size * size;
+    const size  = this.player.craftGridSize;
+    const total = size * size;
 
-    // Consume 1 of each ingredient in grid
+    // Consume the exact amounts indicated by the recipe matcher
     for (let i = 0; i < total; i++) {
       const s = this.player.craftGrid[i];
       if (!s) continue;
-      s.count--;
-      if (s.count === 0) this.player.craftGrid[i] = null;
+      s.count -= consume[i];
+      if (s.count <= 0) this.player.craftGrid[i] = null;
     }
 
     // Add result — prefer held item stacking, then inventory

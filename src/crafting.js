@@ -321,14 +321,17 @@ export const RECIPES = [
 ];
 
 // ── Recipe matcher ─────────────────────────────────────────────────────────────
-// slots  – flat array of item IDs or null, length = gridSize * gridSize
+// slots    – flat array of {id, count}|null, length = gridSize * gridSize
 // gridSize – 2 or 3
-// Returns { id, count } or null.
+// Returns { result: {id, count}, consume: number[] } or null.
+// consume[i] = how many items to deduct from slots[i] when crafting.
 export function matchRecipe(slots, gridSize) {
+  const ids = slots.map(s => s?.id ?? null);
+
   // ── Bounding box of non-null cells ────────────────────────────────────────
   let minR = gridSize, maxR = -1, minC = gridSize, maxC = -1;
-  for (let i = 0; i < slots.length; i++) {
-    if (slots[i] != null) {
+  for (let i = 0; i < ids.length; i++) {
+    if (ids[i] != null) {
       const r = Math.floor(i / gridSize);
       const c = i % gridSize;
       if (r < minR) minR = r;
@@ -342,47 +345,100 @@ export function matchRecipe(slots, gridSize) {
   const bH = maxR - minR + 1;
   const bW = maxC - minC + 1;
 
-  // Bounding box contents as 2-D array
+  // Bounding box contents (IDs) as 2-D array
   const bbox = [];
   for (let r = minR; r <= maxR; r++) {
     const row = [];
     for (let c = minC; c <= maxC; c++) {
-      row.push(slots[r * gridSize + c] ?? null);
+      row.push(ids[r * gridSize + c] ?? null);
     }
     bbox.push(row);
+  }
+
+  // Total item counts available in the grid (by stack amount, not slot count)
+  const available = {};
+  for (const s of slots) {
+    if (s) available[s.id] = (available[s.id] || 0) + s.count;
+  }
+
+  // Build a consume array by deducting `need` amounts from slots in order
+  function buildConsume(need) {
+    const consume = new Array(slots.length).fill(0);
+    const rem = { ...need };
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i];
+      if (!s || !rem[s.id]) continue;
+      const take = Math.min(rem[s.id], s.count);
+      consume[i] = take;
+      rem[s.id] -= take;
+    }
+    return consume;
   }
 
   for (const recipe of RECIPES) {
     if (recipe.size > gridSize) continue;
 
     if (recipe.shapeless) {
-      // Count items in the grid exactly
-      const have = {};
-      for (const id of slots) if (id != null) have[id] = (have[id] || 0) + 1;
+      // Count required amounts
       const need = {};
       for (const id of recipe.ingredients) need[id] = (need[id] || 0) + 1;
-      if (Object.keys(have).length !== Object.keys(need).length) continue;
+
+      // Grid must have exactly the same item types, each in sufficient quantity
+      const needKeys = Object.keys(need);
+      const haveKeys = Object.keys(available);
+      if (needKeys.length !== haveKeys.length) continue;
       let ok = true;
       for (const [id, n] of Object.entries(need)) {
-        if (have[id] !== n) { ok = false; break; }
+        if ((available[id] || 0) < n) { ok = false; break; }
       }
-      if (ok) return recipe.result;
+      if (ok) {
+        for (const id of haveKeys) { if (!need[id]) { ok = false; break; } }
+      }
+      if (ok) return { result: recipe.result, consume: buildConsume(need) };
 
     } else {
-      // Shaped: bounding box must match recipe dimensions
+      // Shaped: try normal bounding-box match first
       const rH = recipe.rows.length;
       const rW = Math.max(...recipe.rows.map(r => r.length));
-      if (bH !== rH || bW !== rW) continue;
 
-      let ok = true;
-      for (let r = 0; r < rH && ok; r++) {
-        for (let c = 0; c < rW && ok; c++) {
-          const expected = recipe.rows[r][c] ?? null;
-          const actual   = bbox[r]?.[c] ?? null;
-          if (expected !== actual) ok = false;
+      if (bH === rH && bW === rW) {
+        let ok = true;
+        for (let r = 0; r < rH && ok; r++) {
+          for (let c = 0; c < rW && ok; c++) {
+            const expected = recipe.rows[r][c] ?? null;
+            const actual   = bbox[r]?.[c] ?? null;
+            if (expected !== actual) ok = false;
+          }
+        }
+        if (ok) {
+          // Consume exactly 1 from each filled slot (normal shaped behaviour)
+          const consume = slots.map(s => s ? 1 : 0);
+          return { result: recipe.result, consume };
         }
       }
-      if (ok) return recipe.result;
+
+      // Stack-spread fallback: player may have stacked items into fewer slots
+      // than the recipe positions require.  Match if the grid contains exactly
+      // the right item types and enough total quantity of each.
+      const need = {};
+      const recipeTypes = new Set();
+      for (const row of recipe.rows) {
+        for (const id of row) {
+          if (id != null) { need[id] = (need[id] || 0) + 1; recipeTypes.add(id); }
+        }
+      }
+
+      const gridTypes = new Set(Object.keys(available).map(Number));
+      if (gridTypes.size !== recipeTypes.size) continue;
+      let typeMatch = true;
+      for (const id of gridTypes) { if (!recipeTypes.has(id)) { typeMatch = false; break; } }
+      if (!typeMatch) continue;
+
+      let ok = true;
+      for (const [id, n] of Object.entries(need)) {
+        if ((available[id] || 0) < n) { ok = false; break; }
+      }
+      if (ok) return { result: recipe.result, consume: buildConsume(need) };
     }
   }
   return null;
