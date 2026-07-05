@@ -253,9 +253,9 @@ export class Player {
     const ny = wy + face[1];
     const nz = wz + face[2];
 
-    // Don't place inside player
+    // Don't place inside player (feet at py, head may reach py+2 at edge of block)
     const px = Math.floor(this.pos.x), py = Math.floor(this.pos.y), pz = Math.floor(this.pos.z);
-    if ((ny === py || ny === py + 1) && nx === px && nz === pz) return;
+    if ((ny === py || ny === py + 1 || ny === py + 2) && nx === px && nz === pz) return;
 
     const slot = this.hotbar[this.selectedSlot];
     const id   = slot?.id;

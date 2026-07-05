@@ -334,13 +334,13 @@ export class Car {
     if (inZCorr) {
       if (fpx < SIDEWALK_WIDTH) {
         this.pos.x += SIDEWALK_WIDTH + 0.5 - fpx; corrected = true;
-      } else if (fpx > roadMax) {
+      } else if (fpx >= roadMax) {
         this.pos.x += roadMax - 0.5 - fpx; corrected = true;
       }
     } else if (inXCorr) {
       if (fpz < SIDEWALK_WIDTH) {
         this.pos.z += SIDEWALK_WIDTH + 0.5 - fpz; corrected = true;
-      } else if (fpz > roadMax) {
+      } else if (fpz >= roadMax) {
         this.pos.z += roadMax - 0.5 - fpz; corrected = true;
       }
     }

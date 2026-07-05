@@ -138,7 +138,7 @@ export class Minimap {
       // stay inside circle
       if ((sx - HALF) * (sx - HALF) + (sy - HALF) * (sy - HALF) > (HALF - 3) * (HALF - 3)) continue;
 
-      const isShopkeeper = npc.role === 'shopkeeper' || npc.role === 'tools' || npc.role === 'general';
+      const isShopkeeper = npc.type === 'shopkeeper' || npc.type === 'merchant';
       ctx.beginPath();
       ctx.arc(sx, sy, isShopkeeper ? 3 : 2, 0, Math.PI * 2);
       ctx.fillStyle = isShopkeeper ? '#ffd700' : '#e0e0ff';

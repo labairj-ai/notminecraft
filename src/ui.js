@@ -1,6 +1,6 @@
 import {
   BLOCK_DEFS, TOOL_DEFS, ITEM_DEFS, AIR, ALL_ITEMS,
-  ACTION_LABELS, TOOL_NEEDED_LABEL, getItemName,
+  ACTION_LABELS, TOOL_NEEDED_LABEL, getItemName, maxStack,
   TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_SWORD, TOOL_HOE,
   STICK, COAL, GOLD_COIN,
 } from './blocks.js';
@@ -365,7 +365,7 @@ export class UI {
       if (this._held) {
         // Place one or all of held into craft slot
         const existing = slotData;
-        if (existing && existing.id === this._held.id && existing.count < 64) {
+        if (existing && existing.id === this._held.id && existing.count < maxStack(existing.id)) {
           existing.count++;
           this._held.count--;
           if (this._held.count === 0) this._held = null;
@@ -384,9 +384,9 @@ export class UI {
       const stack = arr[index];
 
       if (this._held) {
-        if (stack && stack.id === this._held.id && stack.count < 64) {
+        if (stack && stack.id === this._held.id && stack.count < maxStack(stack.id)) {
           // Stack onto existing
-          const space = 64 - stack.count;
+          const space = maxStack(stack.id) - stack.count;
           const move  = Math.min(this._held.count, space);
           stack.count    += move;
           this._held.count -= move;

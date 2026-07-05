@@ -45,7 +45,7 @@ export class World {
       side: THREE.DoubleSide,
     });
 
-    this._pendingBuilds = [];
+    this._pendingBuilds = new Set();
     this.npcs     = new NPCManager(scene, this);
     this.cars     = new CarManager(scene);
     this.busStops = new BusStopManager(scene);
@@ -110,9 +110,7 @@ export class World {
   isSolid(wx, wy, wz) { return B.isSolid(this.getBlock(wx, wy, wz)); }
 
   _scheduleBuild(chunk) {
-    if (!this._pendingBuilds.includes(chunk)) {
-      this._pendingBuilds.push(chunk);
-    }
+    this._pendingBuilds.add(chunk);
   }
 
   update(playerX, playerZ) {
@@ -183,10 +181,11 @@ export class World {
       }
     }
 
-    // Build one dirty chunk per frame (up to 3)
+    // Build up to 3 dirty chunks per frame
     let built = 0;
-    while (this._pendingBuilds.length > 0 && built < 3) {
-      const c = this._pendingBuilds.shift();
+    for (const c of this._pendingBuilds) {
+      if (built >= 3) break;
+      this._pendingBuilds.delete(c);
       if (c && c.data && c.dirty) {
         c.buildMesh(this.solidMat, this.transMat);
         built++;
