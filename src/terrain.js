@@ -345,6 +345,12 @@ export function generateChunkData(chunkX, chunkZ, noise2D, noise3D, worldSeed = 
           const lzl = lz + dz;
           if (lxl < 0 || lxl >= CHUNK_SIZE || lzl < 0 || lzl >= CHUNK_SIZE) continue;
           if (ly <= 0 || ly >= CHUNK_HEIGHT) continue;
+          // Don't let tree leaves grow into city building columns
+          const cityL = getCityInfo(chunkX * 16 + lxl, chunkZ * 16 + lzl, worldSeed);
+          if (cityL) {
+            const colL = getCityColumn(cityL.localX, cityL.localZ, cityL.density, cityL.seed);
+            if (colL.type === 'building') continue;
+          }
           const lidx = blockIndex(lxl, ly, lzl);
           if (data[lidx] === B.AIR) data[lidx] = B.LEAVES;
         }

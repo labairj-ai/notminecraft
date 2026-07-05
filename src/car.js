@@ -352,10 +352,19 @@ export class Car {
       if (Math.abs(this.speed) < 0.05) this.speed = 0;
     }
     if (Math.abs(this.speed) > 0.2) {
-      if (keys['KeyA'] || keys['ArrowLeft'])  this.steer -= steerRate * dt;
-      if (keys['KeyD'] || keys['ArrowRight']) this.steer += steerRate * dt;
+      const left  = keys['KeyA'] || keys['ArrowLeft'];
+      const right = keys['KeyD'] || keys['ArrowRight'];
+      if (left)  this.steer -= steerRate * dt;
+      if (right) this.steer += steerRate * dt;
+      if (!left && !right) {
+        // Snap back to centre quickly so the car goes straight on release
+        this.steer *= Math.exp(-14 * dt);
+        if (Math.abs(this.steer) < 0.002) this.steer = 0;
+      }
+    } else {
+      this.steer *= Math.exp(-8 * dt);
+      if (Math.abs(this.steer) < 0.001) this.steer = 0;
     }
-    this.steer *= Math.exp(-4 * dt);
     this.steer = Math.max(-steerMax, Math.min(steerMax, this.steer));
     this.heading += this.steer * this.speed * 0.12 * dt;
   }
