@@ -32,17 +32,30 @@ function btn(label, bg, size = 60) {
   ].join(';'), label);
 }
 
+function pill(label, bg) {
+  return mk('div', [
+    `background:${bg}cc`, 'color:#fff',
+    'height:44px', 'padding:0 16px', 'border-radius:22px',
+    'display:flex', 'align-items:center', 'justify-content:center',
+    'font-size:0.95em', 'font-weight:700', 'white-space:nowrap',
+    'border:2px solid rgba(255,255,255,0.3)',
+    'pointer-events:auto', 'touch-action:none',
+    'user-select:none', '-webkit-user-select:none',
+    'box-shadow:0 3px 10px rgba(0,0,0,0.5)',
+  ].join(';'), label);
+}
+
 export class MobileControls {
   constructor(player) {
     this.player    = player;
     this.onExitCar = null;
     this.onPause   = null;
 
-    this._jId  = null;            // joystick touch id
-    this._lId  = null;            // look touch id
-    this._ll   = { x: 0, y: 0 }; // last look position
+    this._jId  = null;
+    this._lId  = null;
+    this._ll   = { x: 0, y: 0 };
     this._jCX  = 0;
-    this._jCY  = 0;               // dynamic joystick centre (where thumb landed)
+    this._jCY  = 0;
 
     this._buildDOM();
     this._bindEvents();
@@ -56,7 +69,7 @@ export class MobileControls {
     ].join(';'));
     this._root = root;
 
-    // Left 45 % of screen → joystick zone (transparent)
+    // Left 45% → joystick zone
     const lz = mk('div', [
       'position:absolute', 'top:0', 'left:0',
       'width:45%', 'height:100%',
@@ -65,7 +78,7 @@ export class MobileControls {
     root.appendChild(lz);
     this._lz = lz;
 
-    // Right 55 % of screen → look zone (transparent)
+    // Right 55% → look zone
     const rz = mk('div', [
       'position:absolute', 'top:0', 'right:0',
       'width:55%', 'height:100%',
@@ -74,7 +87,7 @@ export class MobileControls {
     root.appendChild(rz);
     this._rz = rz;
 
-    // Dynamic joystick — spawns wherever thumb touches, hidden by default
+    // Dynamic joystick
     const jBase = mk('div', [
       'position:absolute', 'pointer-events:none', 'display:none',
       'width:120px', 'height:120px', 'border-radius:50%',
@@ -106,37 +119,32 @@ export class MobileControls {
     ].join(';'), '⏸');
     root.appendChild(this._pauseBtn);
 
-    // ── Top-right: FLY ────────────────────────────────────────────────────────
-    const tr = mk('div', [
-      'position:absolute', 'top:16px', 'right:16px', 'z-index:1',
-      'pointer-events:none',
-    ].join(';'));
-    this._flyBtn = btn('FLY', '#7c3aed', 54);
-    tr.appendChild(this._flyBtn);
-    root.appendChild(tr);
-
-    // ── Bottom-right action buttons ───────────────────────────────────────────
+    // ── Bottom-right action panel ─────────────────────────────────────────────
     const br = mk('div', [
       'position:absolute', 'bottom:24px', 'right:16px', 'z-index:1',
-      'display:flex', 'flex-direction:column', 'gap:12px',
+      'display:flex', 'flex-direction:column', 'gap:10px',
       'align-items:flex-end', 'pointer-events:none',
     ].join(';'));
 
-    // Row 1: sprint, F, INV
-    const r1 = mk('div', 'display:flex;gap:10px;align-items:center;');
-    this._sprintBtn = btn('⚡', '#b45309', 52);
-    this._fBtn      = btn('F',  '#0f766e', 52);
-    this._invBtn    = btn('☰',  '#0369a1', 52);
+    // Row 1 — toggles: Sprint | FLY/LAND | F | Inv
+    const r1 = mk('div', 'display:flex;gap:8px;align-items:center;');
+    this._sprintBtn = btn('⚡', '#b45309', 48);
+    this._flyBtn    = pill('🛸 FLY', '#7c3aed');
+    this._fBtn      = btn('F',  '#0f766e', 48);
+    this._invBtn    = btn('☰',  '#0369a1', 48);
     r1.appendChild(this._sprintBtn);
+    r1.appendChild(this._flyBtn);
     r1.appendChild(this._fBtn);
     r1.appendChild(this._invBtn);
 
-    // Row 2: jump (large), break, place
-    const r2 = mk('div', 'display:flex;gap:10px;align-items:center;');
-    this._jumpBtn  = btn('↑',  '#15803d', 72);
-    this._breakBtn = btn('⛏', '#dc2626', 60);
-    this._placeBtn = btn('▣',  '#1d4ed8', 60);
-    r2.appendChild(this._jumpBtn);
+    // Row 2 — actions: Up (jump/fly↑) | Down (fly↓) | Break | Place
+    const r2 = mk('div', 'display:flex;gap:8px;align-items:center;');
+    this._upBtn    = btn('↑',  '#15803d', 68);
+    this._downBtn  = btn('↓',  '#1e3a5f', 56);
+    this._breakBtn = btn('⛏', '#dc2626', 58);
+    this._placeBtn = btn('▣',  '#1d4ed8', 58);
+    r2.appendChild(this._upBtn);
+    r2.appendChild(this._downBtn);
     r2.appendChild(this._breakBtn);
     r2.appendChild(this._placeBtn);
 
@@ -144,7 +152,7 @@ export class MobileControls {
     br.appendChild(r2);
     root.appendChild(br);
 
-    // ── Exit-car button (driving state only) ──────────────────────────────────
+    // ── Exit-car button (driving only) ────────────────────────────────────────
     this._exitBtn = mk('div', [
       'position:absolute', 'top:16px', 'left:50%', 'z-index:1',
       'transform:translateX(-50%)',
@@ -164,14 +172,14 @@ export class MobileControls {
   _bindEvents() {
     const p = this.player;
 
-    // Joystick zone — dynamic: base appears where thumb lands
+    // Joystick zone
     this._lz.addEventListener('touchstart', e => {
       e.preventDefault();
       if (this._jId !== null) return;
-      const t       = e.changedTouches[0];
-      this._jId     = t.identifier;
-      this._jCX     = t.clientX;
-      this._jCY     = t.clientY;
+      const t   = e.changedTouches[0];
+      this._jId = t.identifier;
+      this._jCX = t.clientX;
+      this._jCY = t.clientY;
       this._jBase.style.left    = t.clientX + 'px';
       this._jBase.style.top     = t.clientY + 'px';
       this._jBase.style.display = '';
@@ -234,13 +242,33 @@ export class MobileControls {
     document.addEventListener('touchend',    endTouch, { passive: true });
     document.addEventListener('touchcancel', endTouch, { passive: true });
 
-    // ── Action button bindings ────────────────────────────────────────────────
+    // ── Action buttons ────────────────────────────────────────────────────────
 
-    this._tap(this._jumpBtn, () => {
-      if (!p.flying && p.onGround) { p.vel.y = 9; p.onGround = false; }
-      else if (p.flying) { p.vel.y = 12; setTimeout(() => { if (p.flying) p.vel.y = 0; }, 150); }
-    });
+    // ↑ Up: jump when on ground; hold to fly up when flying
+    this._upBtn.addEventListener('touchstart', e => {
+      e.preventDefault(); e.stopPropagation();
+      if (p.flying) {
+        p.keys['Space'] = true;           // player loop: vel.y = FLY_SPEED while held
+      } else if (p.onGround) {
+        p.vel.y = 9; p.onGround = false;  // one-shot jump
+      }
+    }, { passive: false });
+    this._upBtn.addEventListener('touchend', e => {
+      e.preventDefault();
+      p.keys['Space'] = false;
+    }, { passive: false });
 
+    // ↓ Down: hold to descend when flying (ControlLeft)
+    this._downBtn.addEventListener('touchstart', e => {
+      e.preventDefault(); e.stopPropagation();
+      p.keys['ControlLeft'] = true;
+    }, { passive: false });
+    this._downBtn.addEventListener('touchend', e => {
+      e.preventDefault();
+      p.keys['ControlLeft'] = false;
+    }, { passive: false });
+
+    // Break (hold)
     this._breakBtn.addEventListener('touchstart', e => {
       e.preventDefault(); e.stopPropagation(); p._startBreak();
     }, { passive: false });
@@ -248,11 +276,19 @@ export class MobileControls {
       e.preventDefault(); p.breakTarget = null; p.breakProgress = 0;
     }, { passive: false });
 
-    this._tap(this._placeBtn,  () => p._interact());
+    this._tap(this._placeBtn, () => p._interact());
 
+    // FLY toggle — label + color change so state is obvious
     this._tap(this._flyBtn, () => {
       p.flying = !p.flying; p.vel.set(0, 0, 0);
-      this._flyBtn.style.background = p.flying ? '#6d28d9ec' : '#7c3aedcc';
+      p.keys['Space'] = false; p.keys['ControlLeft'] = false;
+      if (p.flying) {
+        this._flyBtn.textContent = '🛬 LAND';
+        this._flyBtn.style.background = '#dc2626ec';
+      } else {
+        this._flyBtn.textContent = '🛸 FLY';
+        this._flyBtn.style.background = '#7c3aedcc';
+      }
     });
 
     this._tap(this._sprintBtn, () => {
@@ -278,21 +314,22 @@ export class MobileControls {
 
   // ── State transitions ─────────────────────────────────────────────────────────
   showPlaying() {
-    this._root.style.display     = '';
-    this._exitBtn.style.display  = 'none';
-    this._breakBtn.style.display = '';
-    this._placeBtn.style.display = '';
+    this._root.style.display    = '';
+    this._exitBtn.style.display = 'none';
     this._pauseBtn.style.display = '';
+    // Reset fly button label in case state changed
+    if (!this.player.flying) {
+      this._flyBtn.textContent = '🛸 FLY';
+      this._flyBtn.style.background = '#7c3aedcc';
+    }
     this.player.active = true;
     this.player.keys['KeyW'] = this.player.keys['KeyS'] =
     this.player.keys['KeyA'] = this.player.keys['KeyD'] = false;
   }
 
   showDriving() {
-    this._root.style.display     = '';
-    this._exitBtn.style.display  = '';
-    this._breakBtn.style.display = 'none';
-    this._placeBtn.style.display = 'none';
+    this._root.style.display    = '';
+    this._exitBtn.style.display = '';
     this._pauseBtn.style.display = 'none';
   }
 
