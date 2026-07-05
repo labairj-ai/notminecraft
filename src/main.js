@@ -202,6 +202,18 @@ if (IS_MOBILE) {
     if (!bestCar) bestCar = world.cars.getNearest(player.pos, nearCentre ? 8 : 3.5);
     if (bestCar && !bestCar.occupied) { enterCar(bestCar); return; }
   };
+
+  // Wire hotbar slot taps on mobile — each slot selects itself when touched.
+  // Slots need stopPropagation so the mc-root zones don't steal the event.
+  for (let i = 0; i < 9; i++) {
+    const el = document.getElementById(`slot-${i}`);
+    if (!el) continue;
+    el.addEventListener('touchstart', e => {
+      e.stopPropagation();
+      player.selectedSlot = i;
+      document.dispatchEvent(new CustomEvent('slotChange', { detail: i }));
+    }, { passive: true });
+  }
 }
 
 // ── State ────────────────────────────────────────────────────────────────────
