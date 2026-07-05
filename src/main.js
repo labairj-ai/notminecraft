@@ -8,6 +8,7 @@ import { BLOCK_DEFS, getToolAction } from './blocks.js';
 import { Minimap } from './minimap.js';
 import { getCityInfo, CITY_SPACING } from './city.js';
 import { VEHICLE_TYPES } from './car.js';
+import { IS_MOBILE, MobileControls } from './mobile-controls.js';
 
 // ── Renderer ──────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('game-canvas');
@@ -114,6 +115,20 @@ const ui      = new UI(player, world);
 const hand    = new FirstPersonHand(renderer);
 const minimap = new Minimap(document.getElementById('minimap'), world);
 
+let mobileControls = null;
+if (IS_MOBILE) {
+  mobileControls = new MobileControls(player);
+  mobileControls.onExitCar = () => exitCar();
+  mobileControls.onPause   = () => {
+    if (gameState !== 'playing') return;
+    mobileControls.hide();
+    player.active = false;
+    gameState = 'paused';
+    document.getElementById('pause-screen').classList.remove('hidden');
+    ui.hide();
+  };
+}
+
 // ── State ────────────────────────────────────────────────────────────────────
 let gameState = 'menu'; // 'menu'|'playing'|'paused'|'inventory'|'dialog'|'shop'|'driving'
 let lastTime  = 0;
@@ -200,10 +215,12 @@ window.addEventListener('resize', () => {
 
 // ── Pointer lock ──────────────────────────────────────────────────────────────
 function lockPointer() {
+  if (IS_MOBILE) return;
   canvas.requestPointerLock();
 }
 
 document.addEventListener('pointerlockchange', () => {
+  if (IS_MOBILE) return;
   if (document.pointerLockElement === canvas) {
     player.active = true;
   } else {
@@ -223,7 +240,11 @@ document.getElementById('resume-btn').addEventListener('click', () => {
   document.getElementById('pause-screen').classList.add('hidden');
   gameState = 'playing';
   ui.show();
-  lockPointer();
+  if (IS_MOBILE && mobileControls) {
+    mobileControls.showPlaying();
+  } else {
+    lockPointer();
+  }
 });
 
 document.getElementById('quit-btn').addEventListener('click', () => {
@@ -237,7 +258,11 @@ document.getElementById('quit-btn').addEventListener('click', () => {
 document.addEventListener('inventoryClosed', () => {
   if (gameState !== 'inventory') return;
   gameState = 'playing';
-  lockPointer();
+  if (IS_MOBILE && mobileControls) {
+    mobileControls.showPlaying();
+  } else {
+    lockPointer();
+  }
 });
 
 // ── NPC shop open ─────────────────────────────────────────────────────────────
@@ -267,7 +292,8 @@ document.addEventListener('openCrafting', (e) => {
   if (gameState !== 'playing') return;
   document.exitPointerLock();
   gameState = 'inventory';
-  ui.openInventory(e.detail); // detail = 3 for 3×3
+  ui.openInventory(e.detail);
+  if (IS_MOBILE && mobileControls) mobileControls.hide();
 });
 
 // ── Inventory / dialog / shop key handling ────────────────────────────────────
@@ -282,6 +308,7 @@ document.addEventListener('keydown', e => {
     document.exitPointerLock();
     gameState = 'inventory';
     ui.openInventory(2);
+    if (IS_MOBILE && mobileControls) mobileControls.hide();
     return;
   }
   if (e.code === 'KeyE' && gameState === 'driving') {
@@ -334,6 +361,7 @@ function openDialog(npc) {
   gameState     = 'dialog'; // set BEFORE exitPointerLock to avoid pause-screen trigger
   document.exitPointerLock();
   ui.openDialog(npc);
+  if (IS_MOBILE && mobileControls) { mobileControls.hide(); player.active = false; }
 }
 
 function closeDialogOrShop() {
@@ -342,7 +370,11 @@ function closeDialogOrShop() {
   if (activeNPC) activeNPC.talking = false;
   activeNPC = null;
   gameState = 'playing';
-  lockPointer();
+  if (IS_MOBILE && mobileControls) {
+    mobileControls.showPlaying();
+  } else {
+    lockPointer();
+  }
 }
 
 function enterCar(car) {
@@ -351,9 +383,13 @@ function enterCar(car) {
   gameState = 'driving';
   player.active = false; // disable player FPS controls; camera follows car
   document.exitPointerLock();
-  const hint = document.getElementById('npc-hint');
-  hint.textContent = 'WASD / Arrows = Drive  |  E or Esc = Exit Car';
-  hint.classList.remove('hidden');
+  if (IS_MOBILE && mobileControls) {
+    mobileControls.showDriving();
+  } else {
+    const hint = document.getElementById('npc-hint');
+    hint.textContent = 'WASD / Arrows = Drive  |  E or Esc = Exit Car';
+    hint.classList.remove('hidden');
+  }
 }
 
 function exitCar() {
@@ -369,7 +405,11 @@ function exitCar() {
   player.velY = 0;
   player.flying = true;
   document.getElementById('npc-hint').classList.add('hidden');
-  lockPointer(); // E-key is a user gesture, so this works
+  if (IS_MOBILE && mobileControls) {
+    mobileControls.showPlaying();
+  } else {
+    lockPointer(); // E-key is a user gesture, so this works
+  }
 }
 
 // Left-click attack on NPCs when not aiming at a block
@@ -514,6 +554,7 @@ function openBusPanel(stopData) {
   closeBusPanel();
   gameState = 'dialog'; // reuse dialog state to keep pointer unlocked
   document.exitPointerLock();
+  if (IS_MOBILE && mobileControls) { mobileControls.hide(); player.active = false; }
 
   const panel = document.createElement('div');
   panel.id = 'bus-route-panel';
@@ -583,7 +624,11 @@ function closeBusPanel() {
   }
   if (gameState === 'dialog') {
     gameState = 'playing';
-    lockPointer();
+    if (IS_MOBILE && mobileControls) {
+      mobileControls.showPlaying();
+    } else {
+      lockPointer();
+    }
   }
 }
 
@@ -592,7 +637,11 @@ function startGame() {
   document.getElementById('menu-screen').classList.add('hidden');
   gameState = 'playing';
   ui.show();
-  lockPointer();
+  if (IS_MOBILE && mobileControls) {
+    mobileControls.showPlaying();
+  } else {
+    lockPointer();
+  }
   // Prime world generation around spawn
   world.update(8, 8);
 }
