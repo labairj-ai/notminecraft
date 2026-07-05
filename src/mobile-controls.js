@@ -127,12 +127,26 @@ export class MobileControls {
       'align-items:flex-end', 'pointer-events:none',
     ].join(';'));
 
-    // Row 1 — toggles: Sprint | FLY/LAND | F | Inv
-    const r1 = mk('div', 'display:flex;gap:8px;align-items:center;');
-    this._sprintBtn = btn('⚡', '#b45309', 48);
+    // Row 1 — toggles: Sprint | FLY/LAND | F | Inv+Craft
+    const r1 = mk('div', 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;');
+    this._sprintBtn = btn('⚡', '#b45309', 46);
     this._flyBtn    = pill('🛸 FLY', '#7c3aed');
-    this._fBtn      = btn('F',  '#0f766e', 48);
-    this._invBtn    = btn('☰',  '#0369a1', 48);
+    this._fBtn      = btn('F',  '#0f766e', 46);
+
+    // Two-line button: makes inventory + crafting discoverable
+    this._invBtn = mk('div', [
+      'background:#0369a1cc', 'color:#fff',
+      'width:72px', 'height:50px', 'border-radius:12px',
+      'display:flex', 'flex-direction:column',
+      'align-items:center', 'justify-content:center',
+      'font-size:0.82em', 'font-weight:700', 'line-height:1.25',
+      'border:2px solid rgba(255,255,255,0.3)',
+      'pointer-events:auto', 'touch-action:none',
+      'user-select:none', '-webkit-user-select:none',
+      'box-shadow:0 3px 10px rgba(0,0,0,0.5)',
+    ].join(';'));
+    this._invBtn.innerHTML = '🎒 INV<br><span style="font-size:0.82em;opacity:0.85">CRAFT</span>';
+
     r1.appendChild(this._sprintBtn);
     r1.appendChild(this._flyBtn);
     r1.appendChild(this._fBtn);
@@ -215,9 +229,9 @@ export class MobileControls {
           p.keys['KeyW'] = ny < -DEAD;
           p.keys['KeyS'] = ny >  DEAD;
           if (this._isDriving) {
-            // Analog steering: proportional joystick X → steer value, wider dead zone
+            // Analog steering: negate so joystick-left = screen-left
             const raw = nx / JR;
-            p.keys['_analogSteer'] = Math.abs(nx) > DEAD * 1.5 ? raw : 0;
+            p.keys['_analogSteer'] = Math.abs(nx) > DEAD * 1.5 ? -raw : 0;
             p.keys['KeyA'] = false;
             p.keys['KeyD'] = false;
           } else {

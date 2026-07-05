@@ -228,6 +228,11 @@ body {
   line-height: 1.4;
 }
 
+/* Hide keyboard bar on touch devices */
+@media (hover: none) and (pointer: coarse) {
+  #controls-bar { display: none !important; }
+}
+
 /* Menu */
 #menu-screen, #pause-screen {
   position: fixed;
