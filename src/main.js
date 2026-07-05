@@ -127,6 +127,15 @@ if (IS_MOBILE) {
     document.getElementById('pause-screen').classList.remove('hidden');
     ui.hide();
   };
+  mobileControls.onTap = () => {
+    if (gameState !== 'playing') return;
+    const npc = world.npcs.getNearest(player.pos, 4);
+    if (npc) { openDialog(npc); return; }
+    const nearBusStop = world.busStops.getNearest(player.pos, 3);
+    if (nearBusStop) { openBusPanel(nearBusStop); return; }
+    const nearbyCar = world.cars.getNearest(player.pos, 3.5);
+    if (nearbyCar && !nearbyCar.occupied) enterCar(nearbyCar);
+  };
 }
 
 // ── State ────────────────────────────────────────────────────────────────────

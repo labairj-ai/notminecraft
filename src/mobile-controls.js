@@ -39,6 +39,7 @@ export class MobileControls {
     this.player    = player;
     this.onExitCar = null;
     this.onPause   = null;
+    this.onTap     = null; // called when user taps the look zone (interact gesture)
 
     this._jId       = null;
     this._lId       = null;
@@ -47,6 +48,9 @@ export class MobileControls {
     this._jCY       = 0;
     this._isDriving = false;
     this._moreOpen  = false;
+    this._tapX      = 0;
+    this._tapY      = 0;
+    this._tapT      = 0;
 
     this._buildDOM();
     this._bindEvents();
@@ -149,6 +153,9 @@ export class MobileControls {
         if (this._lId === null) {
           this._lId = t.identifier;
           this._ll  = { x: t.clientX, y: t.clientY };
+          this._tapX = t.clientX;
+          this._tapY = t.clientY;
+          this._tapT = Date.now();
           break;
         }
       }
@@ -201,7 +208,15 @@ export class MobileControls {
           p.keys['KeyW'] = p.keys['KeyS'] = p.keys['KeyA'] = p.keys['KeyD'] = false;
           p.keys['_analogSteer'] = undefined;
         }
-        if (t.identifier === this._lId) this._lId = null;
+        if (t.identifier === this._lId) {
+          // Detect tap: finger barely moved and lifted quickly
+          const dx = t.clientX - this._tapX;
+          const dy = t.clientY - this._tapY;
+          if (this.onTap && Math.hypot(dx, dy) < 18 && Date.now() - this._tapT < 260) {
+            this.onTap();
+          }
+          this._lId = null;
+        }
       }
     };
     document.addEventListener('touchend',    endTouch, { passive: true });
