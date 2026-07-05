@@ -71,12 +71,23 @@ Open the URL shown in the terminal (usually `http://localhost:5175`).
 ### NPCs & Dialogue
 - **Street NPCs**: merchants, citizens, builders, businesspeople, police, tourists
 - **Building workers**: shopkeepers, chefs, police officers, researchers — stay inside their buildings
+- **Superhero-inspired characters** roam the streets as rare encounters, each with a unique look and conversation tree:
+  - **Web-Walker** *(spider_hero)* — red/blue suit, full-face mask, blue eye patches, chest web symbol, wrist shooter. Friendly, quippy, shares navigation and crafting tips
+  - **Shadow Knight** *(shadow_knight)* — all-black cowl with bat ears, glowing eye slits, sweeping cape, utility belt. Grim and cryptic, gives underground survival advice
+  - **Kid Crusader** *(kid_hero)* — red/green outfit, yellow cape, eye mask. Enthusiastic trainee cataloguing city merchants; shares price and crafting tips
+  - **The Brute** *(brute)* — green skin, purple pants, torn shirt, furrowed brow. Gruff but gentle city protector; short sentences, surprisingly philosophical
+  - **Scrap Knight** *(scrap_knight)* — red/gold armor, gold faceplate, glowing arc reactor, shoulder pauldrons. Cheerful inventor with a suit that mostly hops
 - NPCs stop wandering and face the player during conversation
 - Branching conversation trees with selectable options:
   - **Easy** (shopkeeper): friendly, leads directly to the shop
   - **Tough** (chef): confrontational haggling path
   - **Dead-end** (police/office): dismissive, goes nowhere
   - **Informative** (researcher): teaches biomes, resources, city mechanics, crafting tips
+  - **Friendly** (Web-Walker): tips on biomes, navigation, and crafting
+  - **Grim** (Shadow Knight): survival and underground warnings
+  - **Enthusiastic** (Kid Crusader): merchant research, training anecdotes
+  - **Gruff** (The Brute): city patrol, lava warnings, purple pants
+  - **Inventive** (Scrap Knight): vehicle crafting guide, Mark VII suit progress
 
 ### Shops & Economy
 - Talk to a shopkeeper or merchant → navigate dialogue → open the shop

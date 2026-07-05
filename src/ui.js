@@ -555,6 +555,8 @@ export class UI {
       merchant: 'Merchant', builder: 'Builder', police: 'Officer',
       businessperson: 'Business', tourist: 'Tourist', citizen: 'Citizen',
       shopkeeper: 'Shopkeeper',
+      spider_hero: 'City Vigilante', shadow_knight: 'Night Guardian',
+      kid_hero: 'Hero in Training', brute: 'Gentle Giant', scrap_knight: 'Inventor',
     };
     const ROLE_BADGES = {
       shopkeeper: 'Shopkeeper', chef: 'Chef',
@@ -567,6 +569,8 @@ export class UI {
       merchant: '#f59e0b', builder: '#d97706', police: '#1d4ed8',
       businessperson: '#4b5563', tourist: '#f472b6', citizen: '#3b82f6',
       shopkeeper: '#7c3aed',
+      spider_hero: '#e53e3e', shadow_knight: '#1a1a1a',
+      kid_hero: '#e53e3e', brute: '#22c55e', scrap_knight: '#dc2626',
     };
     const ROLE_COLORS = {
       shopkeeper: '#7c3aed', chef: '#ef4444',

@@ -53,6 +53,26 @@ const OUTFITS = {
     { shirt:'#5b21b6', pants:'#1f2937', skin:'#8b6248', hair:'#222',    hat:null },
     { shirt:'#4c1d95', pants:'#0f172a', skin:'#fbd0b8', hair:'#555',    hat:null },
   ],
+  spider_hero: [
+    { shirt:'#e53e3e', pants:'#1d4ed8', skin:'#f0c898', hair:'#1a0a00', hat:null },
+    { shirt:'#dc2626', pants:'#1e40af', skin:'#fbd0b8', hair:'#111',    hat:null },
+  ],
+  shadow_knight: [
+    { shirt:'#1a1a1a', pants:'#111111', skin:'#d4a070', hair:'#0d0d0d', hat:null },
+    { shirt:'#0d0d0d', pants:'#1a1a1a', skin:'#8b6248', hair:'#111',    hat:null },
+  ],
+  kid_hero: [
+    { shirt:'#e53e3e', pants:'#1a5c3a', skin:'#f0c898', hair:'#8b6248', hat:null },
+    { shirt:'#dc2626', pants:'#166534', skin:'#fbd0b8', hair:'#92400e', hat:null },
+  ],
+  brute: [
+    { shirt:'#22c55e', pants:'#9333ea', skin:'#22c55e', hair:'#15803d', hat:null },
+    { shirt:'#16a34a', pants:'#7e22ce', skin:'#16a34a', hair:'#166534', hat:null },
+  ],
+  scrap_knight: [
+    { shirt:'#dc2626', pants:'#d97706', skin:'#f0c898', hair:'#111',    hat:null },
+    { shirt:'#b91c1c', pants:'#b45309', skin:'#d4a070', hair:'#1a0a00', hat:null },
+  ],
 };
 
 // ── Dialogue ──────────────────────────────────────────────────────────────────
@@ -124,6 +144,46 @@ const DIALOGUE = {
     "Can you take my photo in front of that building?",
     "I've never seen asphalt before. Very smooth underfoot!",
   ],
+  spider_hero: [
+    "Just finished a rooftop sweep. Three biomes visible from up there.",
+    "Watch out for griefers — I've been keeping this block clean.",
+    "Need anything? I'm between patrols right now.",
+    "Stay lit underground. Lava shows up fast past Y=10.",
+    "The city looks best from above. Find a rooftop sometime.",
+    "I sent three griefers packing this week. City's looking better.",
+  ],
+  shadow_knight: [
+    "...",
+    "Move along. Nothing to see here.",
+    "I'm watching. Always watching.",
+    "Stay in the light at night. Seriously.",
+    "I've had my eye on this block all evening.",
+    "Name's not important. The work is.",
+  ],
+  kid_hero: [
+    "ON PATROL! Well — training patrol. But still!",
+    "I found FOUR merchants today. Six more to go!",
+    "My mentor says I need more patience. I say I need more missions.",
+    "Did you know escalators are in the building corners? Super useful!",
+    "Operation: Very Important Mission is going GREAT.",
+    "I can climb almost to the third floor! Getting closer!",
+  ],
+  brute: [
+    "...",
+    "Brute patrol this sector.",
+    "Today quiet. Good.",
+    "You walk into Brute. Be more careful.",
+    "Brute protect city. Is job now.",
+    "Purple pants ripped again. Very frustrating.",
+  ],
+  scrap_knight: [
+    "Mark VII is coming along. Most of the sparks are planned.",
+    "Ignore the smoke — it's atmospheric. I've decided.",
+    "Have you seen any spare iron ingots? Asking for a project.",
+    "The snack dispenser will work eventually. I have full confidence.",
+    "Four seconds of lava stability. That's enough for a snack.",
+    "The hop is more of a controlled ballistic arc. There's a difference.",
+  ],
 };
 
 // ── Shop inventories ──────────────────────────────────────────────────────────
@@ -194,6 +254,14 @@ SELL_PRICES[WOOL]        = 1;
 SELL_PRICES[BED]         = 6;
 SELL_PRICES[CHEST]       = 8;
 
+const HERO_NAMES = {
+  spider_hero:  ['Web-Walker', 'The Arachnid', 'Spider-Scout'],
+  shadow_knight:['The Shadow Knight', 'Night Sentinel', 'The Dark Guardian'],
+  kid_hero:     ['Kid Crusader', 'Junior Hero', 'The Sidekick'],
+  brute:        ['The Brute', 'Big Green', 'The Green Guardian'],
+  scrap_knight: ['The Iron Inventor', 'Scrap Knight', 'The Tinkerer'],
+};
+
 const CHEF_NAMES = ['Chef Romano','Chef Lin','Chef Okafor','Chef Santos','Chef Müller'];
 const RESEARCHER_NAMES = [
   'Dr. Chen','Dr. Patel','Dr. Nguyen','Dr. Andersen','Prof. Rivera',
@@ -216,7 +284,10 @@ function srng(seed) {
   return () => { s = ((s * 1664525 + 1013904223) >>> 0); return s / 0xffffffff; };
 }
 
-const HP_TABLE = { merchant: 3, citizen: 3, builder: 4, police: 6, businessperson: 3, tourist: 2, shopkeeper: 3 };
+const HP_TABLE = {
+  merchant: 3, citizen: 3, builder: 4, police: 6, businessperson: 3, tourist: 2, shopkeeper: 3,
+  spider_hero: 8, shadow_knight: 10, kid_hero: 5, brute: 20, scrap_knight: 12,
+};
 
 // ── NPC class ─────────────────────────────────────────────────────────────────
 
@@ -272,9 +343,15 @@ class NPC {
       this.name = `${first} ${last}`;
     } else if (type === 'tourist') {
       this.name = `${first} (Visitor)`;
+    } else if (HERO_NAMES[type]) {
+      const pool = HERO_NAMES[type];
+      this.name = pool[Math.floor(r() * pool.length)];
     } else {
       this.name = `${first} ${last}`;
     }
+
+    // Any type with a matching tree gets one (heroes, shopkeepers via role, etc.)
+    this.conversationTree = this.conversationTree || getTreeForRole(role || type) || null;
 
     this.dialog  = DIALOGUE[type] || DIALOGUE.citizen;
     this._dlgIdx = Math.floor(r() * this.dialog.length);
@@ -355,6 +432,67 @@ class NPC {
       const cam = box(0.14, 0.10, 0.08, mat('#1f2937'));
       cam.position.set(0.28, 1.22, 0.16);
       g.add(cam);
+    }
+
+    // Web-Walker: full-face mask, blue eye patches, chest symbol, wrist shooter
+    if (type === 'spider_hero') {
+      const redM  = mat(outfit.shirt);
+      const blueM = mat(outfit.pants);
+      const grayM = mat('#6b7280');
+      const maskM = mat(outfit.shirt);
+      const faceMask = box(0.50, 0.48, 0.02, maskM); faceMask.position.set(0, 1.76, 0.27); g.add(faceMask);
+      const eyeL = box(0.14, 0.09, 0.03, blueM); eyeL.position.set(-0.12, 1.82, 0.28); g.add(eyeL);
+      const eyeR = box(0.14, 0.09, 0.03, blueM); eyeR.position.set( 0.12, 1.82, 0.28); g.add(eyeR);
+      const web  = box(0.20, 0.20, 0.02, blueM); web.position.set(0, 1.20, 0.16);       g.add(web);
+      const ws   = box(0.18, 0.10, 0.20, grayM); ws.position.set(0.38, 0.78, 0);        g.add(ws);
+    }
+
+    // Shadow Knight: cowl, bat ears, glowing eye slits, cape, utility belt
+    if (type === 'shadow_knight') {
+      const blackM  = mat('#0d0d0d');
+      const whiteM  = mat('#e2e8f0');
+      const yellowM = mat('#fbbf24');
+      const cowl = box(0.54, 0.54, 0.54, blackM); cowl.position.set(0, 1.76, 0); g.add(cowl);
+      const earL = box(0.08, 0.22, 0.06, blackM); earL.position.set(-0.15, 2.14, 0); g.add(earL);
+      const earR = box(0.08, 0.22, 0.06, blackM); earR.position.set( 0.15, 2.14, 0); g.add(earR);
+      const eyeL = box(0.13, 0.05, 0.03, whiteM); eyeL.position.set(-0.12, 1.80, 0.28); g.add(eyeL);
+      const eyeR = box(0.13, 0.05, 0.03, whiteM); eyeR.position.set( 0.12, 1.80, 0.28); g.add(eyeR);
+      const cape = box(0.54, 1.00, 0.02, blackM); cape.position.set(0, 1.06, -0.18);    g.add(cape);
+      const belt = box(0.54, 0.07, 0.05, yellowM); belt.position.set(0, 0.80, 0.16);    g.add(belt);
+    }
+
+    // Kid Crusader: eye mask, yellow cape, chest emblem
+    if (type === 'kid_hero') {
+      const blackM  = mat('#0d0d0d');
+      const yellowM = mat('#fbbf24');
+      const whiteM  = mat('#f8fafc');
+      const mask = box(0.40, 0.08, 0.03, blackM);  mask.position.set(0, 1.80, 0.27);    g.add(mask);
+      const cape = box(0.52, 0.60, 0.02, yellowM); cape.position.set(0, 1.18, -0.18);   g.add(cape);
+      const embl = box(0.13, 0.18, 0.02, whiteM);  embl.position.set(0, 1.22, 0.16);    g.add(embl);
+    }
+
+    // The Brute: furrowed brow, torn shirt tears, belt
+    if (type === 'brute') {
+      const darkM   = mat('#15803d');
+      const purpleM = mat(outfit.pants);
+      const browL = box(0.16, 0.06, 0.03, darkM);   browL.position.set(-0.12, 1.88, 0.27); g.add(browL);
+      const browR = box(0.16, 0.06, 0.03, darkM);   browR.position.set( 0.12, 1.88, 0.27); g.add(browR);
+      const tearL = box(0.10, 0.30, 0.03, darkM);   tearL.position.set(-0.26, 1.10, 0.16); g.add(tearL);
+      const tearR = box(0.10, 0.30, 0.03, darkM);   tearR.position.set( 0.26, 1.10, 0.16); g.add(tearR);
+      const belt  = box(0.54, 0.08, 0.04, purpleM); belt.position.set(0, 0.80, 0.16);      g.add(belt);
+    }
+
+    // Scrap Knight: gold faceplate, glowing eye slits, shoulder pauldrons, arc reactor
+    if (type === 'scrap_knight') {
+      const goldM = mat('#d97706');
+      const glowM = mat('#7dd3fc');
+      const redM  = mat(outfit.shirt);
+      const plate = box(0.50, 0.28, 0.03, goldM); plate.position.set(0, 1.68, 0.27);      g.add(plate);
+      const eyeL  = box(0.13, 0.05, 0.04, glowM); eyeL.position.set(-0.10, 1.78, 0.28);  g.add(eyeL);
+      const eyeR  = box(0.13, 0.05, 0.04, glowM); eyeR.position.set( 0.10, 1.78, 0.28);  g.add(eyeR);
+      const pauL  = box(0.28, 0.14, 0.30, redM);  pauL.position.set(-0.45, 1.42, 0);     g.add(pauL);
+      const pauR  = box(0.28, 0.14, 0.30, redM);  pauR.position.set( 0.45, 1.42, 0);     g.add(pauR);
+      const arc   = box(0.14, 0.14, 0.03, glowM); arc.position.set(0, 1.22, 0.16);        g.add(arc);
     }
 
     g.position.copy(this.homePos);

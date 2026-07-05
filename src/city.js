@@ -197,7 +197,15 @@ export function getChunkNPCSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
 
     const r2 = srng(worldSeed + wx * 3571 + wz * 8219 + i);
     const t = r2();
-    const type = t < 0.35 ? 'citizen' : t < 0.6 ? 'police' : t < 0.85 ? 'businessperson' : 'tourist';
+    const type =
+      t < 0.05 ? 'spider_hero' :
+      t < 0.09 ? 'shadow_knight' :
+      t < 0.12 ? 'kid_hero' :
+      t < 0.14 ? 'brute' :
+      t < 0.16 ? 'scrap_knight' :
+      t < 0.46 ? 'citizen' :
+      t < 0.66 ? 'police' :
+      t < 0.84 ? 'businessperson' : 'tourist';
     spawns.push({
       wx: wx + 0.5, wy: CITY_BASE_Y + 1, wz: wz + 0.5,
       type, wander: true,
