@@ -135,6 +135,13 @@ let lastTime  = 0;
 let activeNPC = null;  // NPC currently in dialog/shop
 let activeCar = null;  // car currently being driven
 
+// ── NPC hint element (cached; tap-to-interact on mobile) ──────────────────────
+const _npcHintEl = document.getElementById('npc-hint');
+let   _hintAction = null;  // function to call when hint is tapped on mobile
+_npcHintEl.addEventListener('pointerup', e => {
+  if (IS_MOBILE && _hintAction) { e.preventDefault(); _hintAction(); }
+});
+
 // Driving camera offset (behind and above)
 const _driveCamOffset = new THREE.Vector3();
 const _driveLookAt    = new THREE.Vector3();
@@ -702,21 +709,24 @@ function loop(now) {
     ui.update(dt);
 
     // Nearby context hint
-    const npcHint = document.getElementById('npc-hint');
     const nearNPC = world.npcs.getNearest(player.pos, 4);
     const nearCarHint = world.cars.getNearest(player.pos, 3.5);
     const nearBusStopHint = world.busStops.getNearest(player.pos, 3);
     if (nearCarHint && !nearCarHint.occupied) {
-      npcHint.textContent = 'Press E to enter car';
-      npcHint.classList.remove('hidden');
+      _npcHintEl.textContent = IS_MOBILE ? '🚗  Tap to enter car' : 'Press E to enter car';
+      _npcHintEl.classList.remove('hidden');
+      _hintAction = () => document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', bubbles: true }));
     } else if (nearBusStopHint) {
-      npcHint.textContent = 'Press F for bus routes';
-      npcHint.classList.remove('hidden');
+      _npcHintEl.textContent = IS_MOBILE ? '🚌  Tap for bus routes' : 'Press F for bus routes';
+      _npcHintEl.classList.remove('hidden');
+      _hintAction = () => document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF', bubbles: true }));
     } else if (nearNPC) {
-      npcHint.textContent = 'Press F to talk';
-      npcHint.classList.remove('hidden');
+      _npcHintEl.textContent = IS_MOBILE ? '💬  Tap to talk' : 'Press F to talk';
+      _npcHintEl.classList.remove('hidden');
+      _hintAction = () => document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF', bubbles: true }));
     } else {
-      npcHint.classList.add('hidden');
+      _npcHintEl.classList.add('hidden');
+      _hintAction = null;
     }
 
     // Crack overlay

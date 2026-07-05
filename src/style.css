@@ -228,9 +228,105 @@ body {
   line-height: 1.4;
 }
 
-/* Hide keyboard bar on touch devices */
+/* ── Mobile overrides ───────────────────────────────────────────────────────── */
 @media (hover: none) and (pointer: coarse) {
   #controls-bar { display: none !important; }
+
+  /* NPC hint → large tappable CTA button */
+  #npc-hint {
+    pointer-events: auto;
+    touch-action: manipulation;
+    bottom: 186px;
+    font-size: 17px;
+    font-weight: 700;
+    padding: 14px 32px;
+    border-radius: 30px;
+    border: 2px solid rgba(255,255,255,0.45);
+    background: rgba(0,0,0,0.88);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.55);
+    letter-spacing: 0.02em;
+    animation: hint-pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes hint-pulse {
+    0%,100% { transform: translateX(-50%) scale(1);    box-shadow: 0 4px 24px rgba(0,0,0,0.55); }
+    50%      { transform: translateX(-50%) scale(1.05); box-shadow: 0 6px 32px rgba(255,255,255,0.18); }
+  }
+
+  /* Dialog → full-width bottom sheet */
+  #dialog-screen {
+    padding-bottom: 0;
+    align-items: flex-end;
+  }
+  #dialog-panel {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 20px 20px 0 0;
+    border-bottom: none;
+    max-height: 74vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 24px 20px 36px;
+  }
+  #dialog-npc-name  { font-size: 19px; }
+  #dialog-npc-badge { font-size: 12px; }
+  #dialog-avatar    { width: 56px; height: 56px; }
+  #dialog-text      { font-size: 16px; line-height: 1.65; padding: 14px 16px; }
+  #dialog-actions   { flex-wrap: wrap; gap: 10px; }
+  #dialog-actions button {
+    flex: 1;
+    min-width: 110px;
+    padding: 14px 16px;
+    font-size: 16px;
+    min-height: 50px;
+    border-radius: 10px;
+  }
+  .dlg-opt {
+    padding: 16px 18px;
+    font-size: 16px;
+    min-height: 54px;
+    border-radius: 10px;
+  }
+
+  /* Shop → full-width bottom sheet */
+  #shop-screen { align-items: flex-end; }
+  #shop-panel {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 20px 20px 0 0;
+    border-bottom: none;
+    max-height: 82vh;
+    padding: 20px 16px 36px;
+  }
+  #shop-npc-name   { font-size: 20px; }
+  #shop-coin-display { font-size: 15px; }
+  .shop-tab {
+    padding: 12px 22px;
+    font-size: 15px;
+    min-height: 46px;
+    border-radius: 10px;
+  }
+  #shop-items-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    max-height: 44vh;
+    gap: 12px;
+  }
+  .shop-item-card { padding: 12px; }
+  .shop-item-label { font-size: 14px; }
+  .shop-item-price { font-size: 12px; }
+  .shop-buy-btn {
+    padding: 12px 0;
+    font-size: 15px;
+    min-height: 46px;
+    border-radius: 8px;
+  }
+  #shop-footer { padding-top: 14px; gap: 10px; }
+  #shop-footer button {
+    padding: 14px 20px;
+    font-size: 16px;
+    min-height: 50px;
+    border-radius: 10px;
+  }
+  #shop-status { font-size: 14px; }
 }
 
 /* Menu */
