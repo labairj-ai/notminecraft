@@ -396,13 +396,13 @@ function exitCar() {
   if (!activeCar) return;
   player.pos.set(
     activeCar.pos.x + Math.sin(activeCar.heading + Math.PI / 2) * 2.5,
-    activeCar.pos.y + 1,
+    Math.max(activeCar.pos.y + 1, 24),  // never place player below city road level
     activeCar.pos.z + Math.cos(activeCar.heading + Math.PI / 2) * 2.5,
   );
   activeCar.occupied = false;
   activeCar = null;
   gameState = 'playing';
-  player.velY = 0;
+  player.vel.set(0, 0, 0);  // clear all velocity (was player.velY which doesn't exist)
   player.flying = true;
   document.getElementById('npc-hint').classList.add('hidden');
   if (IS_MOBILE && mobileControls) {

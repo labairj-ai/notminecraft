@@ -209,6 +209,7 @@ export function getChunkNPCSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
 }
 
 const CAR_TYPES = ['car','car','car','car','truck','truck','monster_truck','limo','motorcycle','motorcycle','bus','dog_car'];
+const CAR_GROUND_CLEARANCES = { car:0.26, truck:0.32, monster_truck:0.78, limo:0.28, motorcycle:0.34, bus:0.36, dog_car:0.26 };
 
 // ── Public: car spawn points for a chunk ─────────────────────────────────────
 export function getChunkCarSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
@@ -245,13 +246,14 @@ export function getChunkCarSpawns(chunkX, chunkZ, worldSeed, cityInfoFn) {
       heading = Math.floor(pr() * 4) * Math.PI / 2;
     }
 
+    const vt = CAR_TYPES[Math.floor(pr() * CAR_TYPES.length)];
     spawns.push({
       wx: wx + 0.5,
-      wy: CITY_BASE_Y + 1.26,
+      wy: CITY_BASE_Y + 1 + (CAR_GROUND_CLEARANCES[vt] ?? 0.26),
       wz: wz + 0.5,
       heading,
       seed: Math.floor(worldSeed + wx * 5003 + wz * 7411 + i),
-      vehicleType: CAR_TYPES[Math.floor(pr() * CAR_TYPES.length)],
+      vehicleType: vt,
     });
   }
 

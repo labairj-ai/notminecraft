@@ -56,7 +56,7 @@ Open the URL shown in the terminal (usually `http://localhost:5175`).
 
 ### Villages
 - Compact procedurally-placed villages (~160-block diameter, ~400 blocks apart)
-- **Building types** with themed interiors and wall materials:
+- **Building types** with themed interiors, walkable doors, and wall materials:
   - **Residential** — beds, kitchen counter, furnace, desks
   - **Commercial (shop)** — display counter, chests, crafting table
   - **Restaurant** — bar counter, stools, dining tables and chairs
@@ -98,9 +98,11 @@ Seven drivable vehicle types, each with a distinct 3D mesh and physics profile:
 | **Bus** | Long yellow school-bus, 6 wheels | 10 |
 | **Dog Car** | Novelty — brown body, snout, boxy ears, tail | 18 |
 
-- AI traffic spawns a random mix of all types on city roads
+- AI traffic spawns a random mix of all types on city roads — each type uses its correct wheel-height offset so wheels always sit flush on the road
 - Traffic lights, stop signs, and red-light stopping for AI vehicles
+- Real car physics: ground-following gravity, building collision with wall-sliding
 - Press **E** near any vehicle to enter; **E** or **Esc** to exit
+- Exiting a car that fell into water safely places the player at road level with fly mode on
 - Craftable: place a vehicle recipe on an asphalt road surface
 
 ### Bus Routes & Fast Travel
@@ -121,6 +123,14 @@ Seven drivable vehicle types, each with a distinct 3D mesh and physics profile:
 - 9-slot hotbar + 18-slot main inventory
 - Stack management (up to 64 per slot for blocks/materials, 1 for tools)
 - Click-to-pick-up cursor dragging inside the inventory screen
+
+### Mobile
+- Dynamic joystick (appears where your thumb lands on the left 45% of screen)
+- Swipe-to-look on the right side
+- **🎒 INV / CRAFT** button opens the combined inventory + crafting screen
+- **🛸 FLY / 🛬 LAND** toggle; hold **↑** to fly up, **↓** to fly down
+- Analog steering in vehicles — joystick left = turn left, right = turn right
+- Keyboard shortcut bar hidden on touch devices
 
 ## Tech Stack
 

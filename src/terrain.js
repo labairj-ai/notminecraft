@@ -1,5 +1,5 @@
 import * as B from './blocks.js';
-import { getCityInfo, getCityColumn, CITY_BASE_Y, DOOR_HEIGHT } from './city.js';
+import { getCityInfo, getCityColumn, CITY_BASE_Y, DOOR_HEIGHT, BUILDING_MAX } from './city.js';
 
 // Returns the block to place at a given interior cell above the floor slab.
 // inX/inZ: 1-12, floorNum: 0=ground, 1+
@@ -12,7 +12,10 @@ function interiorBlock(inX, inZ, floorNum, blockInFlr, wallAxisX, buildingType) 
 
   // Partition wall divides building into two rooms (open-plan types skip it)
   const isPartCol = wallAxisX ? (inX === 7) : (inZ === 7);
-  const inPassage = wallAxisX ? (inZ >= 5 && inZ <= 7) : (inX >= 5 && inX <= 7);
+  // Passage through the wall + gaps at both perimeter edges so the door is never blocked from inside
+  const inPassage = wallAxisX
+    ? (inZ >= 5 && inZ <= 7) || inZ <= 1 || inZ >= BUILDING_MAX - 1
+    : (inX >= 5 && inX <= 7) || inX <= 1 || inX >= BUILDING_MAX - 1;
   if (isPartCol && !inPassage && buildingType !== 'fire_station') return B.PLANKS;
 
   // Only place furniture at blockInFlr === 1 (just above floor slab)

@@ -370,6 +370,7 @@ class NPC {
       const cz = Math.floor(nz + (oz - 0.5) * 0.35);
       if (this._world.isSolid(cx, by, cz)) return true;
       if (this._world.isSolid(cx, by + 1, cz)) return true;
+      if (!this._world.isSolid(cx, by - 1, cz)) return true; // no floor → don't float
     }
     return false;
   }
