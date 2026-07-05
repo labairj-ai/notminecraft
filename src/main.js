@@ -6,7 +6,7 @@ import { FirstPersonHand } from './hand.js';
 import * as B from './blocks.js';
 import { BLOCK_DEFS, getToolAction } from './blocks.js';
 import { Minimap } from './minimap.js';
-import { getCityInfo, CITY_SPACING } from './city.js';
+import { getCityInfo, CITY_SPACING, getNearestCityCenter } from './city.js';
 import { VEHICLE_TYPES } from './car.js';
 import { IS_MOBILE, MobileControls } from './mobile-controls.js';
 
@@ -654,8 +654,9 @@ function startGame() {
   } else {
     lockPointer();
   }
-  // Prime world generation around spawn
-  world.update(8, 8);
+  // Prime world generation around city spawn point
+  const _spawnCity = getNearestCityCenter(world.seed);
+  world.update(_spawnCity ? _spawnCity.x : 8, _spawnCity ? _spawnCity.z : 8);
 }
 
 // ── Game loop ─────────────────────────────────────────────────────────────────

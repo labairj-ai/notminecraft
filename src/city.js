@@ -51,6 +51,22 @@ export function getCityInfo(wx, wz, worldSeed) {
   return null;
 }
 
+// Returns the world-space center of the city closest to the world origin
+export function getNearestCityCenter(worldSeed) {
+  const sp = CITY_SPACING;
+  let best = null, bestDist = Infinity;
+  for (let gx = -1; gx <= 1; gx++) {
+    for (let gz = -1; gz <= 1; gz++) {
+      const r  = srng(worldSeed * 31337 + gx * 92837 + gz * 18671);
+      const cx = (gx + 0.2 + r() * 0.6) * sp;
+      const cz = (gz + 0.2 + r() * 0.6) * sp;
+      const dist = Math.sqrt(cx * cx + cz * cz);
+      if (dist < bestDist) { bestDist = dist; best = { x: cx, z: cz }; }
+    }
+  }
+  return best;
+}
+
 // ── Public: per-column layout ──────────────────────────────────────────────────
 //
 // Returns:

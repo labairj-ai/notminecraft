@@ -3,7 +3,7 @@ import { createNoise2D, createNoise3D } from 'simplex-noise';
 import { Chunk } from './chunk.js';
 import { createAtlas } from './textures.js';
 import { CHUNK_SIZE, CHUNK_HEIGHT, SEA_LEVEL } from './terrain.js';
-import { getCityInfo, getChunkNPCSpawns, getChunkCarSpawns, getChunkShopkeeperSpawns, getChunkBusStopSpawns } from './city.js';
+import { getCityInfo, getChunkNPCSpawns, getChunkCarSpawns, getChunkShopkeeperSpawns, getChunkBusStopSpawns, getNearestCityCenter, CITY_BASE_Y } from './city.js';
 import { NPCManager } from './npc.js';
 import { CarManager, BusStopManager } from './car.js';
 import { TrafficManager, getChunkTrafficSpawns } from './traffic.js';
@@ -234,17 +234,19 @@ export class World {
   // that sits above SEA_LEVEL (i.e. dry land).  Returns null if no loaded chunk
   // has land yet — caller retries next frame.
   findLandSpawn() {
+    const city = getNearestCityCenter(this.seed);
+    const ox = city ? Math.round(city.x) : 8;
+    const oz = city ? Math.round(city.z) : 8;
     for (let r = 0; r <= 12; r++) {
       for (let dx = -r; dx <= r; dx++) {
         for (let dz = -r; dz <= r; dz++) {
-          if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue; // only the shell
-          const wx = 8 + dx * 4;
-          const wz = 8 + dz * 4;
+          if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue;
+          const wx = ox + dx * 4;
+          const wz = oz + dz * 4;
           const cx = Math.floor(wx / CHUNK_SIZE);
           const cz = Math.floor(wz / CHUNK_SIZE);
           if (!this.chunks.has(this.key(cx, cz))) continue;
-          // Scan downward from just above sea level — any solid block here is land
-          for (let y = CHUNK_HEIGHT - 1; y > SEA_LEVEL; y--) {
+          for (let y = CITY_BASE_Y + 4; y >= CITY_BASE_Y; y--) {
             if (B.isSolid(this.getBlock(wx, y, wz))) {
               return { x: wx + 0.5, y: y + 2, z: wz + 0.5 };
             }
@@ -252,6 +254,6 @@ export class World {
         }
       }
     }
-    return null; // no land found in loaded chunks yet
+    return null;
   }
 }
