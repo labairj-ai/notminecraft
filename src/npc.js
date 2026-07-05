@@ -5,6 +5,7 @@ import {
   TOOL_PICKAXE_GOLD, TOOL_AXE_GOLD, TOOL_SWORD_GOLD,
   TOOL_PICKAXE_DIAMOND, TOOL_SWORD_DIAMOND,
   STICK, COAL, WOOL, GOLD_INGOT, DIAMOND, LANTERN, LADDER, FENCE,
+  MEAT, RAW_FISH, FUR, FISHING_ROD,
 } from './blocks.js';
 import { getTreeForRole } from './dialogue.js';
 
@@ -217,6 +218,12 @@ export const SHOP_INVENTORIES = {
     { id: TORCH,                price:  2, count: 4, label: 'Torch ×4'        },
     { id: STICK,                price:  1, count: 8, label: 'Sticks ×8'       },
   ],
+  food: [
+    { id: MEAT,        price:  5, count: 2,  label: 'Meat ×2'          },
+    { id: RAW_FISH,    price:  3, count: 2,  label: 'Raw Fish ×2'      },
+    { id: FUR,         price:  4, count: 2,  label: 'Fur ×2'           },
+    { id: FISHING_ROD, price: 18, count: 1,  label: 'Fishing Rod'      },
+  ],
   general: [
     { id: COAL,        price:  3, count: 2,  label: 'Coal ×2'          },
     { id: STICK,       price:  1, count: 8,  label: 'Sticks ×8'        },
@@ -253,6 +260,9 @@ SELL_PRICES[CONCRETE]    = 1;
 SELL_PRICES[WOOL]        = 1;
 SELL_PRICES[BED]         = 6;
 SELL_PRICES[CHEST]       = 8;
+SELL_PRICES[MEAT]        = 3;
+SELL_PRICES[RAW_FISH]    = 2;
+SELL_PRICES[FUR]         = 3;
 
 const HERO_NAMES = {
   spider_hero:  ['Web-Walker', 'The Arachnid', 'Spider-Scout'],

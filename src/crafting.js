@@ -18,7 +18,7 @@ import {
   CHAIR, TABLE, LAMP, COUNTER, DESK, TV, STOOL, FILING_CABINET, ESCALATOR_UP,
   LADDER, FENCE, LANTERN,
   IRON_INGOT, STEEL_INGOT, GOLD_INGOT, DIAMOND, VEHICLE,
-  STICK, COAL,
+  STICK, COAL, FISHING_ROD,
   TOOL_PICKAXE, TOOL_AXE, TOOL_SHOVEL, TOOL_SWORD, TOOL_HOE,
   TOOL_PICKAXE_GOLD, TOOL_AXE_GOLD, TOOL_SHOVEL_GOLD, TOOL_SWORD_GOLD,
   TOOL_PICKAXE_DIAMOND, TOOL_AXE_DIAMOND, TOOL_SHOVEL_DIAMOND, TOOL_SWORD_DIAMOND,
@@ -318,6 +318,13 @@ export const RECIPES = [
   // Diamond sword
   { size: 3, rows: [[DIAMOND], [DIAMOND], [STICK]],
     result: { id: TOOL_SWORD_DIAMOND, count: 1 } },
+
+  // Fishing rod: sticks diagonal + wool as line (3×3)
+  //  _ _ S
+  //  _ S _
+  //  S _ W
+  { size: 3, rows: [[null, null, STICK], [null, STICK, null], [STICK, null, WOOL]],
+    result: { id: FISHING_ROD, count: 1 } },
 ];
 
 // ── Recipe matcher ─────────────────────────────────────────────────────────────

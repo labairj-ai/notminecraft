@@ -235,6 +235,21 @@ function makeFish(r) {
   return { g, tail };
 }
 
+// ── Animal drop tables ────────────────────────────────────────────────────────
+const ANIMAL_DROPS = {
+  sheep:  [{ id: B.MEAT, min:1, max:2 }, { id: B.FUR, min:1, max:2 }],
+  cow:    [{ id: B.MEAT, min:2, max:3 }, { id: B.FUR, min:1, max:2 }],
+  horse:  [{ id: B.MEAT, min:2, max:3 }, { id: B.FUR, min:1, max:3 }],
+  rabbit: [{ id: B.MEAT, min:1, max:1 }, { id: B.FUR, min:1, max:1 }],
+  deer:   [{ id: B.MEAT, min:2, max:3 }, { id: B.FUR, min:1, max:2 }],
+  goat:   [{ id: B.MEAT, min:1, max:2 }, { id: B.FUR, min:1, max:1 }],
+  wolf:   [                               { id: B.FUR, min:1, max:1 }],
+  dog:    [],
+  frog:   [],
+  turtle: [],
+  fish:   [{ id: B.RAW_FISH, min:1, max:2 }],
+};
+
 // ── Per-type config ───────────────────────────────────────────────────────────
 const ANIMAL_CFG = {
   sheep:  { speed: 1.2, flee: true,  fleeR: 5,  legsPhase: 8 },
@@ -277,6 +292,13 @@ class Animal {
     this._wanderTarget = this.pos.clone();
     this._wanderTimer  = r() * 4;
 
+    this.health    = 10;
+    this.maxHealth = 10;
+    this._dying    = false;
+    this._deathTimer = 0;
+    this._hitFlash   = 0;
+    this.drops     = []; // filled on death
+
     // Build mesh
     const builder = BUILDERS[type] || makeSheep;
     const parts = builder(r);
@@ -285,6 +307,22 @@ class Animal {
     this._group.position.copy(this.pos);
     scene.add(this._group);
   }
+
+  takeDamage(amount) {
+    if (this._dying) return;
+    this.health -= amount;
+    this._hitFlash = 0.2;
+    if (this.health <= 0) {
+      this._dying = true;
+      const cfg = ANIMAL_DROPS[this.type] || [];
+      for (const d of cfg) {
+        const count = d.min + Math.floor(Math.random() * (d.max - d.min + 1));
+        if (count > 0) this.drops.push({ id: d.id, count });
+      }
+    }
+  }
+
+  getDrops() { return this.drops; }
 
   _isBlocked(nx, nz) {
     const by = Math.floor(this.homePos.y) + 1;
@@ -297,6 +335,31 @@ class Animal {
   }
 
   update(dt, playerPos) {
+    // Death animation
+    if (this._dying) {
+      this._deathTimer += dt;
+      const t = Math.min(this._deathTimer / 0.5, 1);
+      this._group.rotation.z = t * Math.PI / 2;
+      this._group.position.y -= t * 0.02;
+      if (this._deathTimer > 0.5) {
+        const fade = Math.max(0, 1 - (this._deathTimer - 0.5) / 0.3);
+        this._group.traverse(o => {
+          if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = fade; }
+        });
+        if (this._deathTimer > 0.8) {
+          this.dispose();
+          return true;
+        }
+      }
+      return false;
+    }
+    // Hit flash
+    if (this._hitFlash > 0) {
+      this._hitFlash -= dt;
+      const h = this._hitFlash > 0 ? 0xff4444 : 0x000000;
+      this._group.traverse(o => { if (o.isMesh && o.material.emissive) o.material.emissive.setHex(h); });
+    }
+
     const cfg = ANIMAL_CFG[this.type] || ANIMAL_CFG.sheep;
     this._phase += dt;
 
@@ -497,10 +560,28 @@ export class AnimalManager {
     this._chunks.delete(chunkKey);
   }
 
-  update(dt, playerPos) {
+  update(dt, playerPos, onDrop) {
     for (const [k, animal] of this._animals) {
-      animal.update(dt, playerPos);
+      const dead = animal.update(dt, playerPos);
+      if (dead) {
+        if (onDrop) for (const d of animal.getDrops()) onDrop(d.id, d.count);
+        this._animals.delete(k);
+        // Also remove from chunk tracking
+        for (const keys of this._chunks.values()) keys.delete(k);
+      }
     }
+  }
+
+  getNearest(pos, range) {
+    let best = null, bestD2 = range * range;
+    for (const animal of this._animals.values()) {
+      if (animal._dying) continue;
+      const dx = animal._group.position.x - pos.x;
+      const dz = animal._group.position.z - pos.z;
+      const d2 = dx*dx + dz*dz;
+      if (d2 < bestD2) { bestD2 = d2; best = animal; }
+    }
+    return best;
   }
 
   get _npcs() { return this._animals; } // expose same interface for minimap

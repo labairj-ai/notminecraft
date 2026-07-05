@@ -129,6 +129,15 @@ if (IS_MOBILE) {
   };
   mobileControls.onTap = () => {
     if (gameState !== 'playing') return;
+    const slot = player.hotbar[player.selectedSlot];
+    if (slot?.id === B.FISHING_ROD) {
+      if (player.startFishing(world)) {
+        const hint = document.getElementById('npc-hint');
+        hint.textContent = '🎣 Fishing...';
+        hint.classList.remove('hidden');
+        return;
+      }
+    }
     const npc = world.npcs.getNearest(player.pos, 4);
     if (npc) { openDialog(npc); return; }
     const nearBusStop = world.busStops.getNearest(player.pos, 3);
@@ -348,8 +357,23 @@ document.addEventListener('keydown', e => {
     ui.closeInventory();
     return;
   }
-  // F = bus stop or NPC
+  // R = eat held food item
+  if (e.code === 'KeyR' && gameState === 'playing') {
+    player.eat();
+    return;
+  }
+  // F = fishing rod / bus stop / NPC
   if (e.code === 'KeyF' && gameState === 'playing') {
+    // Check fishing rod first
+    const slot = player.hotbar[player.selectedSlot];
+    if (slot?.id === B.FISHING_ROD) {
+      if (player.startFishing(world)) {
+        const hint = document.getElementById('npc-hint');
+        hint.textContent = '🎣 Fishing...';
+        hint.classList.remove('hidden');
+        return;
+      }
+    }
     const nearBusStop = world.busStops.getNearest(player.pos, 3);
     if (nearBusStop) { openBusPanel(nearBusStop); return; }
     const npc = world.npcs.getNearest(player.pos, 4);
@@ -433,17 +457,19 @@ function exitCar() {
   }
 }
 
-// Left-click attack on NPCs when not aiming at a block
+// Left-click attack on NPCs / animals / hostiles when not aiming at a block
 document.addEventListener('mousedown', e => {
   if (e.button !== 0 || !player.active || gameState !== 'playing') return;
   // Only attack when there's no block target (swinging in air / at NPC)
   if (!player.target) {
+    const toolDef = B.TOOL_DEFS[player.hotbar[player.selectedSlot]?.id];
+    const dmg = toolDef?.damage ?? 1;
     const npc = world.npcs.getNearest(player.pos, 3.0);
-    if (npc) {
-      const toolDef = B.TOOL_DEFS[player.hotbar[player.selectedSlot]?.id];
-      const dmg = toolDef?.damage ?? 1;
-      npc.takeDamage(dmg);
-    }
+    if (npc) { npc.takeDamage(dmg); return; }
+    const animal = world.animals.getNearest(player.pos, 3.0);
+    if (animal) { animal.takeDamage(dmg); return; }
+    const hostile = world.hostiles.getNearest(player.pos, 3.0);
+    if (hostile) { hostile.takeDamage(dmg); }
   }
 });
 
@@ -680,7 +706,11 @@ function loop(now) {
 
   if (gameState !== 'menu' && gameState !== 'paused') {
     world.npcs.update(dt, player.pos);
-    world.animals.update(dt, player.pos);
+    world.animals.update(dt, player.pos, (id, count) => player.addItem(id, count));
+    world.hostiles.update(dt, player.pos, timeOfDay,
+      (dmg) => player.takeDamage(dmg),
+      (pos, dmg) => player.takeDamage(dmg)
+    );
   }
 
   const _cityInfoFn  = (wx, wz)      => world.cityInfo(wx, wz);
@@ -722,6 +752,16 @@ function loop(now) {
     player.update(dt);
     world.update(player.pos.x, player.pos.z);
     ui.update(dt);
+
+    // Fishing update
+    const fishCatch = player.updateFishing(dt);
+    if (fishCatch) {
+      player.addItem(fishCatch.id, fishCatch.count);
+      const hint = document.getElementById('npc-hint');
+      hint.textContent = `🎣 Caught ${fishCatch.count} Raw Fish!`;
+      hint.classList.remove('hidden');
+      setTimeout(() => hint.classList.add('hidden'), 2000);
+    }
 
     // Nearby context hint
     const nearNPC = world.npcs.getNearest(player.pos, 4);

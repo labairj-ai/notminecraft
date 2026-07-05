@@ -8,6 +8,7 @@ import { NPCManager } from './npc.js';
 import { CarManager, BusStopManager } from './car.js';
 import { TrafficManager, getChunkTrafficSpawns } from './traffic.js';
 import { AnimalManager, getChunkAnimalSpawns } from './animals.js';
+import { HostileManager } from './hostiles.js';
 import * as B from './blocks.js';
 
 const RENDER_DIST = 7;
@@ -51,6 +52,7 @@ export class World {
     this.busStops = new BusStopManager(scene);
     this.traffic  = new TrafficManager(scene);
     this.animals  = new AnimalManager(scene, this);
+    this.hostiles = new HostileManager(scene, this);
   }
 
   cityInfo(wx, wz) { return getCityInfo(wx, wz, this.seed); }

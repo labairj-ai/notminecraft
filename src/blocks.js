@@ -66,6 +66,11 @@ export const GOLD_INGOT    = 63;  // smelted from gold ore
 export const DIAMOND       = 64;  // smelted from diamond ore
 export const LANTERN       = 65;  // hanging emissive light
 
+export const MEAT         = 74;
+export const RAW_FISH     = 75;
+export const FUR          = 76;
+export const FISHING_ROD  = 77;
+
 // ── Tiered tools ──────────────────────────────────────────────────────────────
 export const TOOL_PICKAXE_GOLD    = 66;
 export const TOOL_AXE_GOLD        = 67;
@@ -155,6 +160,7 @@ export const TOOL_DEFS = {
   [TOOL_AXE_DIAMOND]:     { name:'Diamond Axe',   toolAction:'chop',  isItem:true, maxStack:1, speed:4.0, damage:2 },
   [TOOL_SHOVEL_DIAMOND]:  { name:'Diamond Shovel',toolAction:'dig',   isItem:true, maxStack:1, speed:4.0, damage:2 },
   [TOOL_SWORD_DIAMOND]:   { name:'Diamond Sword', toolAction:'swing', isItem:true, maxStack:1, speed:1.0, damage:4 },
+  [FISHING_ROD]: { name:'Fishing Rod', toolAction:'fish', isItem:true, maxStack:1, speed:1.0, damage:0 },
 };
 
 // ── Material item definitions ──────────────────────────────────────────────────
@@ -167,6 +173,9 @@ export const ITEM_DEFS = {
   [VEHICLE]:     { name:'Vehicle',      isItem:true, maxStack:1   },
   [GOLD_INGOT]:  { name:'Gold Ingot',   isItem:true, maxStack:64  },
   [DIAMOND]:     { name:'Diamond',      isItem:true, maxStack:64  },
+  [MEAT]:        { name:'Meat',         isItem:true, maxStack:16, food: 4  },
+  [RAW_FISH]:    { name:'Raw Fish',     isItem:true, maxStack:16, food: 2  },
+  [FUR]:         { name:'Fur',          isItem:true, maxStack:64           },
 };
 
 // ── Block drop overrides (id → drop instead of the block itself) ───────────────
@@ -251,5 +260,6 @@ export const ALL_ITEMS = [
   TOOL_PICKAXE_GOLD, TOOL_AXE_GOLD, TOOL_SHOVEL_GOLD, TOOL_SWORD_GOLD,
   TOOL_PICKAXE_DIAMOND, TOOL_AXE_DIAMOND, TOOL_SHOVEL_DIAMOND, TOOL_SWORD_DIAMOND,
   STICK, COAL, GOLD_COIN, IRON_INGOT, STEEL_INGOT, GOLD_INGOT, DIAMOND,
+  MEAT, RAW_FISH, FUR, FISHING_ROD,
   ...ALL_BLOCKS,
 ];

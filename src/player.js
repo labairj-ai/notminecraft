@@ -28,6 +28,10 @@ export class Player {
 
     this.health    = 20;
     this.maxHealth = 20;
+    this._iFrames  = 0;
+
+    this._fishing    = false;
+    this._fishTimer  = 0;
 
     // Slots store { id:Number, count:Number } or null
     this.hotbar    = Array(9).fill(null);
@@ -324,11 +328,55 @@ export class Player {
   // ── Physics / movement ─────────────────────────────────────────────────────
 
   update(dt) {
+    if (this._iFrames > 0) this._iFrames -= dt;
     this._updateLook();
     this._updateMovement(dt);
     this._updateBreaking(dt);
     this._updateTarget();
     this._applyCamera();
+  }
+
+  takeDamage(dmg) {
+    if (this._iFrames > 0) return;
+    this.health = Math.max(0, this.health - dmg);
+    this._iFrames = 0.8;
+  }
+
+  eat() {
+    const slot = this.hotbar[this.selectedSlot];
+    if (!slot) return false;
+    const def = B.ITEM_DEFS[slot.id];
+    if (!def?.food) return false;
+    this.health = Math.min(20, this.health + def.food);
+    slot.count--;
+    if (slot.count <= 0) this.hotbar[this.selectedSlot] = null;
+    return true;
+  }
+
+  startFishing(world) {
+    if (this._fishing) return false;
+    // Check for water block within 3 blocks in facing direction
+    const fx = Math.round(this.pos.x - Math.sin(this.yaw) * 2);
+    const fz = Math.round(this.pos.z - Math.cos(this.yaw) * 2);
+    const fy = Math.floor(this.pos.y);
+    for (let dy = -1; dy <= 1; dy++) {
+      if (world.getBlock(fx, fy + dy, fz) === B.WATER || world.getBlock(fx, fy + dy, fz) === B.ICE) {
+        this._fishing = true;
+        this._fishTimer = 3 + Math.random() * 5;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  updateFishing(dt) {
+    if (!this._fishing) return null;
+    this._fishTimer -= dt;
+    if (this._fishTimer <= 0) {
+      this._fishing = false;
+      return { id: B.RAW_FISH, count: 1 + Math.floor(Math.random() * 2) };
+    }
+    return null;
   }
 
   _updateLook() {}
