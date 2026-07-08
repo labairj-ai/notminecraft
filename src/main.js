@@ -4,7 +4,7 @@ import { Player } from './player.js';
 import { UI } from './ui.js';
 import { FirstPersonHand } from './hand.js';
 import * as B from './blocks.js';
-import { BLOCK_DEFS, getToolAction } from './blocks.js';
+import { BLOCK_DEFS, getToolAction, getItemName } from './blocks.js';
 import { Minimap } from './minimap.js';
 import { getCityInfo, CITY_SPACING, getNearestCityCenter } from './city.js';
 import { VEHICLE_TYPES } from './car.js';
@@ -249,6 +249,20 @@ function showHintMessage(text, seconds = 2) {
 
 // ── NPC hint element (cached; tap-to-interact on mobile) ──────────────────────
 const _npcHintEl = document.getElementById('npc-hint');
+
+// ── Target label — shows what the crosshair is aimed at ──────────────────────
+const _targetLabelEl = document.getElementById('target-label');
+let _lastTargetText = '';
+function _updateTargetLabel(text) {
+  if (text === _lastTargetText) return;
+  _lastTargetText = text;
+  if (text) {
+    _targetLabelEl.textContent = text;
+    _targetLabelEl.classList.add('show');
+  } else {
+    _targetLabelEl.classList.remove('show');
+  }
+}
 let   _hintAction = null;  // function to call when hint is tapped on mobile
 // touchstart fires before the look-zone can capture the touch sequence
 _npcHintEl.addEventListener('touchstart', e => {
@@ -912,13 +926,75 @@ function loop(now) {
     // Crack overlay
     updateCrackOverlay(player.getBreakProgress(), player.breakTarget);
 
-    // Block highlight
+    // Block highlight + target label
     if (player.target) {
       const { wx, wy, wz } = player.target;
       hlMesh.position.set(wx + 0.5, wy + 0.5, wz + 0.5);
       hlMesh.visible = true;
+      _updateTargetLabel(getItemName(world.getBlock(wx, wy, wz)) || '');
     } else {
       hlMesh.visible = false;
+      // Check for nearby entity in the look direction (NPC, animal, hostile, car)
+      // Raytrace through all entities within reach and pick the closest one.
+      const origin = new THREE.Vector3().copy(player.pos);
+      origin.y += 1.62; // eye height
+      const dir = new THREE.Vector3(0, 0, -1).applyEuler(
+        new THREE.Euler(player.pitch, player.yaw, 0, 'YXZ')
+      );
+      const REACH = 5;
+      let closestLabel = '';
+      let closestDist = REACH;
+
+      // NPCs
+      for (const npc of world.npcs._npcs.values()) {
+        if (!npc._group) continue;
+        const ep = npc._group.position;
+        const toE = new THREE.Vector3(ep.x - origin.x, ep.y + 1 - origin.y, ep.z - origin.z);
+        const dist = toE.length();
+        if (dist > REACH) continue;
+        const dot = toE.normalize().dot(dir);
+        if (dot > 0.92 && dist < closestDist) {
+          closestDist = dist;
+          closestLabel = npc.name || npc.type || 'NPC';
+        }
+      }
+      // Animals
+      for (const animal of world.animals._animals.values()) {
+        if (animal._dying) continue;
+        const toE = new THREE.Vector3(animal.pos.x - origin.x, animal.pos.y + 0.5 - origin.y, animal.pos.z - origin.z);
+        const dist = toE.length();
+        if (dist > REACH) continue;
+        const dot = toE.normalize().dot(dir);
+        if (dot > 0.92 && dist < closestDist) {
+          closestDist = dist;
+          closestLabel = animal.type.charAt(0).toUpperCase() + animal.type.slice(1);
+        }
+      }
+      // Hostiles
+      for (const hostile of world.hostiles._hostiles.values()) {
+        if (hostile._dying) continue;
+        const toE = new THREE.Vector3(hostile.pos.x - origin.x, hostile.pos.y + 1 - origin.y, hostile.pos.z - origin.z);
+        const dist = toE.length();
+        if (dist > REACH) continue;
+        const dot = toE.normalize().dot(dir);
+        if (dot > 0.92 && dist < closestDist) {
+          closestDist = dist;
+          closestLabel = hostile.type.charAt(0).toUpperCase() + hostile.type.slice(1);
+        }
+      }
+      // Cars
+      for (const car of world.cars._cars.values()) {
+        const toE = new THREE.Vector3(car.pos.x - origin.x, car.pos.y + 0.6 - origin.y, car.pos.z - origin.z);
+        const dist = toE.length();
+        if (dist > REACH + 2) continue; // cars are big — slightly extended reach
+        const dot = toE.normalize().dot(dir);
+        if (dot > 0.88 && dist < closestDist) {
+          closestDist = dist;
+          const t = car.vehicleType || 'car';
+          closestLabel = t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+      }
+      _updateTargetLabel(closestLabel);
     }
 
     // First-person hand — driven by the HELD ITEM, not the block's action
@@ -939,9 +1015,12 @@ function loop(now) {
   renderer.clear();
   renderer.render(scene, camera);
   if (gameState === 'playing' || gameState === 'dialog' || gameState === 'shop') hand.render();
-  // Outside active play, clear the block highlight and crack overlay so they
-  // don't linger while driving or in dialogs/menus.
-  if (gameState !== 'playing') { hlMesh.visible = false; crackMesh.visible = false; }
+  // Outside active play, clear block highlight, crack overlay, and target label.
+  if (gameState !== 'playing') {
+    hlMesh.visible = false;
+    crackMesh.visible = false;
+    _updateTargetLabel('');
+  }
 
   // Minimap — visible whenever the HUD is up
   if (gameState === 'playing' || gameState === 'dialog' || gameState === 'shop' || gameState === 'driving') {

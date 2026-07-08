@@ -53,6 +53,27 @@ body {
   pointer-events: none;
 }
 
+/* Target label — appears above crosshair showing focused block/entity name */
+#target-label {
+  position: absolute;
+  top: calc(50% - 42px);
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: bold;
+  text-shadow: 1px 1px 2px #000, -1px -1px 2px #000;
+  background: rgba(0,0,0,0.38);
+  padding: 2px 10px;
+  border-radius: 4px;
+  pointer-events: none;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+#target-label.show { opacity: 1; }
+
 /* Action indicator — appears below crosshair during breaking */
 #action-indicator {
   position: absolute;
