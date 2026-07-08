@@ -41,9 +41,11 @@ npm run dev
 - Water, lava, ice, snow
 - Dirt exposed to air gradually regrows into grass over ~8 seconds
 
-### Minimap
-- Circular minimap in the top-right corner with height-shaded terrain
-- Rotating player arrow, NPC dots, and compass rose (N/S/E/W)
+### HUD
+- **Target label** — small label above the crosshair shows the name of whatever the crosshair is aimed at: block name (e.g. "Stone", "Lamp", "Crafting Table"), NPC name, animal/hostile type, or vehicle model. Fades out when nothing is targeted
+- **Minimap** — circular minimap in the top-right corner with height-shaded terrain, rotating player arrow, NPC dots, and compass rose (N/S/E/W)
+- **Health bar** — 20 HP displayed as hearts in the HUD
+- **Hotbar** — 9-slot quickbar with item icons and counts; selected item name briefly appears on pickup
 
 ### Blocks & Tools
 - 47+ block types including furniture and city infrastructure
@@ -69,6 +71,7 @@ npm run dev
 - You have 20 HP; displayed in the HUD
 - Fall damage, hostile mob attacks, and lava reduce health
 - **Eating** restores health — press **R** with food in your active hotbar slot
+- **Death & respawn** — on death, you respawn at your spawn point with full health and a brief "You died!" notice
 
 #### Food Items
 | Item | Source | Health restored | Stack |
@@ -200,3 +203,12 @@ Seven drivable vehicle types, each with a distinct 3D mesh and physics profile:
 - [simplex-noise](https://github.com/jwagner/simplex-noise) 4.x — terrain generation
 - [Vite](https://vitejs.dev/) 5.x — dev server & bundler
 - ES modules throughout, no TypeScript, no framework
+
+## Development
+
+```bash
+npm run dev    # start dev server at localhost:5177/notminecraft/
+npm run build  # production build → dist/
+```
+
+Each build stamps the service worker cache with the build timestamp, so deploying a new version automatically invalidates any stale cached assets on the user's next visit. The home screen displays the last build time.
