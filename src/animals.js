@@ -2,13 +2,10 @@ import * as THREE from 'three';
 import { CHUNK_SIZE, CHUNK_HEIGHT, SEA_LEVEL } from './terrain.js';
 import * as B from './blocks.js';
 import { getCityInfo } from './city.js';
+import { srng } from './rng.js';
 
 function mat(c) { return new THREE.MeshLambertMaterial({ color: c }); }
 function box(w, h, d, m) { return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); }
-function srng(seed) {
-  let s = (seed * 1664525 + 1013904223) >>> 0;
-  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 0xffffffff; };
-}
 
 // ── Animal mesh builders ──────────────────────────────────────────────────────
 // All builders return { g (Group), legFL, legFR, legBL, legBR, head, [extras] }
@@ -325,11 +322,12 @@ class Animal {
   getDrops() { return this.drops; }
 
   _isBlocked(nx, nz) {
-    const by = Math.floor(this.homePos.y) + 1;
+    const by = Math.floor(this.homePos.y); // feet level (homePos.y sits on the surface)
     for (const [ox, oz] of [[0,0],[1,0],[0,1],[1,1]]) {
       const cx = Math.floor(nx + (ox - 0.5) * 0.25);
       const cz = Math.floor(nz + (oz - 0.5) * 0.25);
       if (B.isSolid(this._world.getBlock(cx, by, cz))) return true;
+      if (B.isSolid(this._world.getBlock(cx, by + 1, cz))) return true;
     }
     return false;
   }
@@ -459,7 +457,8 @@ class Animal {
       for (let dy = 0; dy <= 16; dy++) {
         if (fromY - dy < 0) break;
         if (this._world.isSolid(gx, fromY - dy, gz)) {
-          this.homePos.y = (fromY - dy) + 0.5;
+          // Solid block at Y occupies [Y, Y+1] — feet belong at Y+1
+          this.homePos.y = (fromY - dy) + 1;
           break;
         }
       }
@@ -666,7 +665,7 @@ export function getChunkAnimalSpawns(chunk, worldSeed, cityInfoFn) {
       wy = SEA_LEVEL - 0.5;
     } else {
       if (sy <= SEA_LEVEL) continue; // skip underwater land
-      wy = sy + 0.5;
+      wy = sy + 1; // stand on top of the surface block, not inside it
     }
 
     spawns.push({ wx: wx + 0.5, wy, wz: wz + 0.5, type, seed: (r() * 1e9) | 0 });

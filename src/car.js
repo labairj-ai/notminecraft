@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { STREET_PERIOD, STREET_WIDTH, SIDEWALK_WIDTH } from './city.js';
+import { STREET_PERIOD, STREET_WIDTH, SIDEWALK_WIDTH, CITY_BASE_Y } from './city.js';
+import { srng } from './rng.js';
 
 function mod(x, n) { return ((x % n) + n) % n; }
 
@@ -12,10 +13,6 @@ function mat(color, extra = {}) {
 }
 function box(w, h, d, m) {
   return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
-}
-function srng(seed) {
-  let s = ((seed * 1664525 + 1013904223) >>> 0);
-  return () => { s = ((s * 1664525 + 1013904223) >>> 0); return s / 0xffffffff; };
 }
 
 const PALETTES = [
@@ -601,7 +598,8 @@ export class BusStopManager {
       signPlate.position.set(-0.7, 1.4, 0.09);
       group.add(signPlate);
 
-      group.position.set(data.wx, 24, data.wz); // CITY_BASE_Y = 24
+      // CITY_BASE_Y block tops out at CITY_BASE_Y + 1 — that's the walking surface
+      group.position.set(data.wx, CITY_BASE_Y + 1, data.wz);
       this._scene.add(group);
       entries.push({ group, data });
     }

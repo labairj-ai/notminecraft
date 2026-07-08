@@ -8,6 +8,7 @@ import {
   MEAT, RAW_FISH, FUR, FISHING_ROD,
 } from './blocks.js';
 import { getTreeForRole } from './dialogue.js';
+import { srng } from './rng.js';
 
 // ── Outfits ───────────────────────────────────────────────────────────────────
 
@@ -289,10 +290,6 @@ const LAST_NAMES  = ['Smith','Chen','Garcia','Kumar','Wilson','Park','Martinez',
 function mat(color) { return new THREE.MeshLambertMaterial({ color }); }
 function box(w, h, d, m) { return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); }
 
-function srng(seed) {
-  let s = ((seed * 1664525 + 1013904223) >>> 0);
-  return () => { s = ((s * 1664525 + 1013904223) >>> 0); return s / 0xffffffff; };
-}
 
 const HP_TABLE = {
   merchant: 3, citizen: 3, builder: 4, police: 6, businessperson: 3, tourist: 2, shopkeeper: 3,

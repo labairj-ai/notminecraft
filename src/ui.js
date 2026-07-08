@@ -190,6 +190,8 @@ export class UI {
 
     this._blockNameTimer = 0;
     this._lastSlot = -1;
+    this._lastHealth = -1;
+    this._hotbarSig = '';
 
     this._buildHotbarIcons();
 
@@ -467,16 +469,23 @@ export class UI {
       this._lastSlot = p.selectedSlot;
     }
 
-    // Hotbar icons
-    for (let i = 0; i < 9; i++) this._refreshHotbarSlot(i);
+    // Hotbar icons — redraw only when the contents actually change
+    const sig = p.hotbar.map(s => s ? `${s.id}:${s.count}` : '').join(',');
+    if (sig !== this._hotbarSig) {
+      this._hotbarSig = sig;
+      for (let i = 0; i < 9; i++) this._refreshHotbarSlot(i);
+    }
 
-    // Health bar
-    this.healthEl.innerHTML = '';
-    for (let i = 0; i < 10; i++) {
-      const h      = document.createElement('div');
-      const filled = p.health - i * 2;
-      h.className  = 'heart' + (filled >= 2 ? '' : filled >= 1 ? ' half' : ' empty');
-      this.healthEl.appendChild(h);
+    // Health bar — rebuild only when health changes
+    if (p.health !== this._lastHealth) {
+      this._lastHealth = p.health;
+      this.healthEl.innerHTML = '';
+      for (let i = 0; i < 10; i++) {
+        const h      = document.createElement('div');
+        const filled = p.health - i * 2;
+        h.className  = 'heart' + (filled >= 2 ? '' : filled >= 1 ? ' half' : ' empty');
+        this.healthEl.appendChild(h);
+      }
     }
 
     // Break ring + action indicator

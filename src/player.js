@@ -446,7 +446,6 @@ export class Player {
     if (!this._collide(this.pos.x, this.pos.y, nz)) this.pos.z = nz; else this.vel.z = 0;
 
     if (this.pos.y < 1) { this.pos.y = 1; this.vel.y = 0; this.onGround = true; }
-    if (this.pos.y < -10) { this.health = 0; this.pos.set(0, 60, 0); this.vel.set(0,0,0); }
   }
 
   _collide(px, py, pz, throughEscalator = false) {
@@ -506,7 +505,17 @@ export class Player {
     const land = world.findLandSpawn();
     if (land) {
       this.pos.set(land.x, land.y, land.z);
+      this.spawnPos = this.pos.clone();
       this.spawned = true;
     }
+  }
+
+  respawn() {
+    this.health = this.maxHealth;
+    this._iFrames = 1.5;
+    this.vel.set(0, 0, 0);
+    this.flying = false;
+    this._fishing = false;
+    if (this.spawnPos) this.pos.copy(this.spawnPos);
   }
 }

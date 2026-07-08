@@ -50,11 +50,13 @@ export class Minimap {
     const cx = Math.round(playerX);
     const cz = Math.round(playerZ);
 
-    // Rebuild terrain every 4 frames, or when player moved >2 blocks
-    if (this._frame % 4 === 0 ||
-        this._cx === null ||
+    // Rebuild terrain only when the player has moved a few blocks, plus a slow
+    // periodic refresh to pick up block edits and freshly loaded chunks.
+    // (The bake scans 128×128 columns — doing it every few frames tanked FPS.)
+    if (this._cx === null ||
         Math.abs(cx - this._cx) > 2 ||
-        Math.abs(cz - this._cz) > 2) {
+        Math.abs(cz - this._cz) > 2 ||
+        this._frame % 30 === 0) {
       this._cx = cx;
       this._cz = cz;
       this._bakeTerrain(cx, cz);

@@ -1,5 +1,6 @@
 // ── City layout, NPC spawn, and car spawn ─────────────────────────────────────
 import * as B from './blocks.js';
+import { srng } from './rng.js';
 
 export const CITY_SPACING   = 400;   // distance between village centres
 export const CITY_RADIUS    = 80;    // small village footprint
@@ -13,11 +14,6 @@ export const BUILDING_MAX   = STREET_PERIOD - STREET_WIDTH - 1; // 13
 export const DOOR_WIDTH  = 2;
 export const DOOR_START  = 6;
 export const DOOR_HEIGHT = 3;
-
-function srng(seed) {
-  let s = ((seed * 1664525 + 1013904223) >>> 0);
-  return () => { s = ((s * 1664525 + 1013904223) >>> 0); return s / 0xffffffff; };
-}
 
 function mod(x, n) { return ((x % n) + n) % n; }
 

@@ -121,42 +121,54 @@ export class World {
     const pcx = Math.floor(playerX / CHUNK_SIZE);
     const pcz = Math.floor(playerZ / CHUNK_SIZE);
 
-    // Load chunks in range
+    // Load chunks in range — budgeted per frame, nearest first, so the game
+    // doesn't freeze for seconds generating the whole render circle at once.
+    const missing = [];
     for (let dx = -RENDER_DIST; dx <= RENDER_DIST; dx++) {
       for (let dz = -RENDER_DIST; dz <= RENDER_DIST; dz++) {
-        if (dx*dx + dz*dz > RENDER_DIST*RENDER_DIST) continue;
+        const d2 = dx*dx + dz*dz;
+        if (d2 > RENDER_DIST*RENDER_DIST) continue;
         const cx = pcx + dx;
         const cz = pcz + dz;
-        const k  = this.key(cx, cz);
-        if (!this.chunks.has(k)) {
-          const c = new Chunk(cx, cz, this);
-          c.generate(this.noise2D, this.noise3D);
-          this.chunks.set(k, c);
-          this._scheduleBuild(c);
-          // Spawn NPCs and cars for this chunk
-          const spawns = getChunkNPCSpawns(cx, cz, this.seed,
-            (wx, wz) => this.cityInfo(wx, wz));
-          this.npcs.spawnForChunk(k, spawns);
-          const carSpawns = getChunkCarSpawns(cx, cz, this.seed,
-            (wx, wz) => this.cityInfo(wx, wz));
-          this.cars.spawnForChunk(k, carSpawns);
-          const trafficSpawns = getChunkTrafficSpawns(cx, cz, this.seed,
-            (wx, wz) => this.cityInfo(wx, wz));
-          this.traffic.spawnForChunk(k, trafficSpawns);
-          const shopSpawns = getChunkShopkeeperSpawns(cx, cz, this.seed,
-            (wx, wz) => this.cityInfo(wx, wz));
-          this.npcs.spawnForChunk(k + ':shop', shopSpawns);
-          const animalSpawns = getChunkAnimalSpawns(c, this.seed,
-            (wx, wz) => this.cityInfo(wx, wz));
-          this.animals.spawnForChunk(k, animalSpawns);
-          const busStopSpawns = getChunkBusStopSpawns(cx, cz, this.seed,
-            (wx, wz) => this.cityInfo(wx, wz));
-          this.busStops.spawnForChunk(k, busStopSpawns);
-          const slSpawns = getChunkStreetlightSpawns(cx, cz, this.seed,
-            (wx, wz) => this.cityInfo(wx, wz));
-          this.streetlights.spawnForChunk(k, slSpawns);
-        }
+        if (!this.chunks.has(this.key(cx, cz))) missing.push([d2, cx, cz]);
       }
+    }
+    missing.sort((a, b) => a[0] - b[0]);
+    const GEN_BUDGET = 10;
+    for (const [, cx, cz] of missing.slice(0, GEN_BUDGET)) {
+      const k = this.key(cx, cz);
+      const c = new Chunk(cx, cz, this);
+      c.generate(this.noise2D, this.noise3D);
+      this.chunks.set(k, c);
+      this._scheduleBuild(c);
+      // Rebuild already-meshed neighbours so their border faces account for
+      // this chunk's blocks (they were meshed against AIR before it existed)
+      for (const [nx, nz] of [[cx-1,cz],[cx+1,cz],[cx,cz-1],[cx,cz+1]]) {
+        const n = this.getChunk(nx, nz);
+        if (n && n.data && !n.dirty) { n.dirty = true; this._scheduleBuild(n); }
+      }
+      // Spawn NPCs and cars for this chunk
+      const spawns = getChunkNPCSpawns(cx, cz, this.seed,
+        (wx, wz) => this.cityInfo(wx, wz));
+      this.npcs.spawnForChunk(k, spawns);
+      const carSpawns = getChunkCarSpawns(cx, cz, this.seed,
+        (wx, wz) => this.cityInfo(wx, wz));
+      this.cars.spawnForChunk(k, carSpawns);
+      const trafficSpawns = getChunkTrafficSpawns(cx, cz, this.seed,
+        (wx, wz) => this.cityInfo(wx, wz));
+      this.traffic.spawnForChunk(k, trafficSpawns);
+      const shopSpawns = getChunkShopkeeperSpawns(cx, cz, this.seed,
+        (wx, wz) => this.cityInfo(wx, wz));
+      this.npcs.spawnForChunk(k + ':shop', shopSpawns);
+      const animalSpawns = getChunkAnimalSpawns(c, this.seed,
+        (wx, wz) => this.cityInfo(wx, wz));
+      this.animals.spawnForChunk(k, animalSpawns);
+      const busStopSpawns = getChunkBusStopSpawns(cx, cz, this.seed,
+        (wx, wz) => this.cityInfo(wx, wz));
+      this.busStops.spawnForChunk(k, busStopSpawns);
+      const slSpawns = getChunkStreetlightSpawns(cx, cz, this.seed,
+        (wx, wz) => this.cityInfo(wx, wz));
+      this.streetlights.spawnForChunk(k, slSpawns);
     }
 
     // Unload far chunks
@@ -189,10 +201,12 @@ export class World {
       }
     }
 
-    // Build up to 3 dirty chunks per frame
+    // Build dirty chunk meshes — 3/frame in steady state, more while the
+    // initial queue drains so the world doesn't stream in as floating props.
+    const buildBudget = this._pendingBuilds.size > 24 ? 8 : 3;
     let built = 0;
     for (const c of this._pendingBuilds) {
-      if (built >= 3) break;
+      if (built >= buildBudget) break;
       this._pendingBuilds.delete(c);
       if (c && c.data && c.dirty) {
         c.buildMesh(this.solidMat, this.transMat);

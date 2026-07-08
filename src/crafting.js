@@ -436,16 +436,24 @@ export function matchRecipe(slots, gridSize) {
         }
       }
 
-      // Stack-spread fallback: player may have stacked items into fewer slots
-      // than the recipe positions require.  Match if the grid contains exactly
-      // the right item types and enough total quantity of each.
+      // Stack-spread fallback: player stacked items into fewer slots than the
+      // recipe has cells.  Guarded tightly so it can't hijack a properly
+      // arranged grid meant for a different recipe (e.g. 4 planks laid out
+      // 2×2 for a crafting table must NOT match the 2-plank stick recipe):
+      //  - only applies when there are fewer filled slots than recipe cells
+      //    (i.e. stacking actually happened), and
+      //  - total quantities must match the recipe EXACTLY.
       const need = {};
+      let cellCount = 0;
       const recipeTypes = new Set();
       for (const row of recipe.rows) {
         for (const id of row) {
-          if (id != null) { need[id] = (need[id] || 0) + 1; recipeTypes.add(id); }
+          if (id != null) { need[id] = (need[id] || 0) + 1; recipeTypes.add(id); cellCount++; }
         }
       }
+
+      const filledSlots = slots.filter(Boolean).length;
+      if (filledSlots >= cellCount) continue;
 
       const gridTypes = new Set(Object.keys(available).map(Number));
       if (gridTypes.size !== recipeTypes.size) continue;
@@ -455,7 +463,7 @@ export function matchRecipe(slots, gridSize) {
 
       let ok = true;
       for (const [id, n] of Object.entries(need)) {
-        if ((available[id] || 0) < n) { ok = false; break; }
+        if ((available[id] || 0) !== n) { ok = false; break; }
       }
       if (ok) return { result: recipe.result, consume: buildConsume(need) };
     }

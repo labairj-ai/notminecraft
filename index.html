@@ -107,7 +107,7 @@
         <p>WASD — Move &nbsp;|&nbsp; Mouse — Look &nbsp;|&nbsp; Space — Jump</p>
         <p>Left Click — Break &nbsp;|&nbsp; Right Click — Place</p>
         <p>1-9 / Scroll — Hotbar &nbsp;|&nbsp; E — Inventory &nbsp;|&nbsp; Esc — Menu</p>
-        <p>G — Fly &nbsp;|&nbsp; F — Interact with NPC &nbsp;|&nbsp; Shift — Sprint/Descend &nbsp;|&nbsp; Ctrl — Sneak</p>
+        <p>G — Fly &nbsp;|&nbsp; F — Interact &nbsp;|&nbsp; Shift — Sprint &nbsp;|&nbsp; Ctrl — Descend (flying)</p>
       </div>
     </div>
   </div>
@@ -163,7 +163,10 @@
   <script type="module" src="src/main.js"></script>
 
   <script>
-    if ('serviceWorker' in navigator) {
+    // Skip the service worker during local dev — it caches Vite's transformed
+    // modules and serves stale (even broken) code across edits.
+    if ('serviceWorker' in navigator &&
+        location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
       const hadController = !!navigator.serviceWorker.controller;
       navigator.serviceWorker.register('/notminecraft/sw.js', {
         scope: '/notminecraft/',

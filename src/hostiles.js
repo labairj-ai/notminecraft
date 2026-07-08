@@ -407,12 +407,14 @@ export class HostileManager {
 
       if (result === true) {
         // Fully dead
+        h.dispose();
         this._hostiles.delete(k);
         continue;
       }
 
       if (result && result.explode) {
         if (onExplosion) onExplosion(result.pos, result.damage);
+        h.dispose();
         this._hostiles.delete(k);
         continue;
       }
@@ -422,11 +424,16 @@ export class HostileManager {
       }
 
       if (result && result.type === 'projectile') {
-        // Skeleton: simple line-of-sight check, if player in range deal damage
+        // Skeleton: only hits when in range AND with clear line of sight
         const dx = playerPos.x - h.pos.x;
+        const dy = (playerPos.y + 1.4) - (h.pos.y + 1.4);
         const dz = playerPos.z - h.pos.z;
-        if (Math.sqrt(dx*dx + dz*dz) < HOSTILE_CFG.skeleton.range) {
-          if (onDamage) onDamage(result.damage);
+        const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+        if (dist < HOSTILE_CFG.skeleton.range) {
+          const origin = new THREE.Vector3(h.pos.x, h.pos.y + 1.4, h.pos.z);
+          const dir    = new THREE.Vector3(dx, dy, dz).normalize();
+          const hit    = this._world.raycast(origin, dir, dist);
+          if (!hit && onDamage) onDamage(result.damage);
         }
       }
 

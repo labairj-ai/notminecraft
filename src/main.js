@@ -21,7 +21,9 @@ renderer.autoClear = false; // we control clearing manually for the hand pass
 
 // ── Scene / Camera ────────────────────────────────────────────────────────────
 const scene  = new THREE.Scene();
-scene.fog    = new THREE.Fog(0x87ceeb, 80, 160);
+// Fog far distance sits just inside the loaded-chunk radius (7 chunks ≈ 112
+// blocks) so unloaded terrain fades out instead of popping in at the edge.
+scene.fog    = new THREE.Fog(0x87ceeb, 60, 110);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 500);
 scene.add(camera);
@@ -176,41 +178,43 @@ if (IS_MOBILE) {
 
     const W = renderer.domElement.clientWidth;
     const H = renderer.domElement.clientHeight;
-    // Tap near screen centre counts for anything within proximity
+    // Tap near screen centre counts for anything in close proximity. Kept
+    // tight (25% of the short edge) — a generous radius meant almost every
+    // look-around tap hijacked the camera into a dialog or car.
     const nearCentre = tapX !== undefined &&
-      Math.hypot(tapX - W / 2, tapY - H / 2) < Math.max(W, H) * 0.6;
+      Math.hypot(tapX - W / 2, tapY - H / 2) < Math.min(W, H) * 0.25;
 
-    // ── NPC — screen-space pick (180 px) then world-space fallback (8 blocks) ──
+    // ── NPC — screen-space pick (120 px) then close-range fallback ───────────
     let bestNPC = null, bestNPCPx = Infinity;
     for (const npc of world.npcs._npcs.values()) {
       if (!npc._group) continue;
       const wd = npc._group.position.distanceTo(player.pos);
-      if (wd > 12) continue;
+      if (wd > 10) continue;
       const wp = npc._group.position.clone(); wp.y += 1;
       const sc = _toScreen(wp);
       if (!sc) continue;
       const px = Math.hypot(tapX - sc.x, tapY - sc.y);
-      if (px < 180 && px < bestNPCPx) { bestNPCPx = px; bestNPC = npc; }
+      if (px < 120 && px < bestNPCPx) { bestNPCPx = px; bestNPC = npc; }
     }
-    if (!bestNPC) bestNPC = world.npcs.getNearest(player.pos, nearCentre ? 8 : 4);
+    if (!bestNPC && nearCentre) bestNPC = world.npcs.getNearest(player.pos, 4);
     if (bestNPC) { openDialog(bestNPC); return; }
 
     // ── Bus stop ──────────────────────────────────────────────────────────────
-    const nearBusStop = world.busStops.getNearest(player.pos, nearCentre ? 6 : 3);
+    const nearBusStop = world.busStops.getNearest(player.pos, nearCentre ? 4 : 3);
     if (nearBusStop) { openBusPanel(nearBusStop); return; }
 
-    // ── Car — screen-space pick (200 px) then world-space fallback ───────────
+    // ── Car — screen-space pick (150 px) then close-range fallback ───────────
     let bestCar = null, bestCarPx = Infinity;
     for (const car of world.cars._cars.values()) {
       if (car.occupied) continue;
       const wd = car.pos.distanceTo(player.pos);
-      if (wd > 15) continue;
+      if (wd > 12) continue;
       const sc = _toScreen(car.pos);
       if (!sc) continue;
       const px = Math.hypot(tapX - sc.x, tapY - sc.y);
-      if (px < 200 && px < bestCarPx) { bestCarPx = px; bestCar = car; }
+      if (px < 150 && px < bestCarPx) { bestCarPx = px; bestCar = car; }
     }
-    if (!bestCar) bestCar = world.cars.getNearest(player.pos, nearCentre ? 8 : 3.5);
+    if (!bestCar && nearCentre) bestCar = world.cars.getNearest(player.pos, 5);
     if (bestCar && !bestCar.occupied) { enterCar(bestCar); return; }
   };
 
@@ -232,6 +236,16 @@ let gameState = 'menu'; // 'menu'|'playing'|'paused'|'inventory'|'dialog'|'shop'
 let lastTime  = 0;
 let activeNPC = null;  // NPC currently in dialog/shop
 let activeCar = null;  // car currently being driven
+let spawnCity = null;  // world-space spawn city centre; world focus until player spawns
+
+// Timed HUD message (fishing catch, death, etc.) — shown via the hint element
+// so per-frame context hints don't immediately overwrite it.
+let hintMessage      = null;
+let hintMessageUntil = 0;
+function showHintMessage(text, seconds = 2) {
+  hintMessage      = text;
+  hintMessageUntil = performance.now() + seconds * 1000;
+}
 
 // ── NPC hint element (cached; tap-to-interact on mobile) ──────────────────────
 const _npcHintEl = document.getElementById('npc-hint');
@@ -519,16 +533,20 @@ function enterCar(car) {
 
 function exitCar() {
   if (!activeCar) return;
-  player.pos.set(
-    activeCar.pos.x + Math.sin(activeCar.heading + Math.PI / 2) * 2.5,
-    Math.max(activeCar.pos.y + 1, 24),  // never place player below city road level
-    activeCar.pos.z + Math.cos(activeCar.heading + Math.PI / 2) * 2.5,
-  );
+  const ex = activeCar.pos.x + Math.sin(activeCar.heading + Math.PI / 2) * 2.5;
+  const ez = activeCar.pos.z + Math.cos(activeCar.heading + Math.PI / 2) * 2.5;
+  // Scan down for the ground surface beside the car so the player steps out
+  // standing on it (previously this force-enabled fly mode as a workaround).
+  let ey = null;
+  for (let y = Math.min(Math.floor(activeCar.pos.y) + 2, 62); y >= 0; y--) {
+    if (B.isSolid(world.getBlock(Math.floor(ex), y, Math.floor(ez)))) { ey = y + 1; break; }
+  }
+  player.pos.set(ex, ey ?? activeCar.pos.y + 1, ez);
   activeCar.occupied = false;
   activeCar = null;
   gameState = 'playing';
-  player.vel.set(0, 0, 0);  // clear all velocity (was player.velY which doesn't exist)
-  player.flying = true;
+  player.vel.set(0, 0, 0);
+  player.flying = false;
   document.getElementById('npc-hint').classList.add('hidden');
   if (IS_MOBILE && mobileControls) {
     mobileControls.showPlaying();
@@ -577,7 +595,9 @@ document.getElementById('shop-close-btn').addEventListener('click', () => {
 
 // ── Dev helpers ───────────────────────────────────────────────────────────────
 window.__tp = (x, y, z) => { player.pos.set(x, y ?? 30, z); player.vel.set(0,0,0); };
-window.__world = () => world; // expose for console debugging
+window.__world  = () => world;  // expose for console debugging
+window.__player = () => player;
+window.__state  = () => gameState;
 window.__findSnow = () => {
   for (const chunk of world.chunks.values()) {
     if (!chunk.data) continue;
@@ -770,8 +790,8 @@ function startGame() {
     lockPointer();
   }
   // Prime world generation around city spawn point
-  const _spawnCity = getNearestCityCenter(world.seed);
-  world.update(_spawnCity ? _spawnCity.x : 8, _spawnCity ? _spawnCity.z : 8);
+  spawnCity = getNearestCityCenter(world.seed) || { x: 8, z: 8 };
+  world.update(spawnCity.x, spawnCity.z);
 }
 
 // ── Game loop ─────────────────────────────────────────────────────────────────
@@ -787,9 +807,16 @@ function loop(now) {
   if (gameState !== 'menu' && gameState !== 'paused') {
     world.npcs.update(dt, player.pos);
     world.animals.update(dt, player.pos, (id, count) => player.addItem(id, count));
+  }
+
+  // Hostiles only act while actually playing/driving — no more getting mauled
+  // with zero recourse while browsing the inventory or talking to an NPC.
+  // While driving they still move, but the car protects the player.
+  if (gameState === 'playing' || gameState === 'driving') {
+    const canHurt = () => gameState === 'playing';
     world.hostiles.update(dt, player.pos, timeOfDay,
-      (dmg) => player.takeDamage(dmg),
-      (pos, dmg) => player.takeDamage(dmg)
+      (dmg) => { if (canHurt()) player.takeDamage(dmg); },
+      (pos, dmg) => { if (canHurt()) player.takeDamage(dmg); }
     );
   }
 
@@ -829,25 +856,43 @@ function loop(now) {
 
     if (!player.spawned) player.spawn(world);
 
-    player.update(dt);
-    world.update(player.pos.x, player.pos.z);
+    // Until the player has a spawn point, keep loading around the spawn city —
+    // not around the player's default (0,0) position — or the freshly primed
+    // city chunks get unloaded before findLandSpawn can use them.
+    if (player.spawned) {
+      player.update(dt);
+      world.update(player.pos.x, player.pos.z);
+    } else {
+      world.update(spawnCity ? spawnCity.x : 8, spawnCity ? spawnCity.z : 8);
+    }
     ui.update(dt);
+
+    // Death → respawn at the spawn point with full health
+    if (player.spawned && player.health <= 0) {
+      player.respawn();
+      showHintMessage('💀 You died!', 3);
+    }
 
     // Fishing update
     const fishCatch = player.updateFishing(dt);
     if (fishCatch) {
       player.addItem(fishCatch.id, fishCatch.count);
-      const hint = document.getElementById('npc-hint');
-      hint.textContent = `🎣 Caught ${fishCatch.count} Raw Fish!`;
-      hint.classList.remove('hidden');
-      setTimeout(() => hint.classList.add('hidden'), 2000);
+      showHintMessage(`🎣 Caught ${fishCatch.count} Raw Fish!`, 2);
     }
 
     // Nearby context hint
     const nearNPC = world.npcs.getNearest(player.pos, 4);
     const nearCarHint = world.cars.getNearest(player.pos, 3.5);
     const nearBusStopHint = world.busStops.getNearest(player.pos, 3);
-    if (nearCarHint && !nearCarHint.occupied) {
+    if (hintMessage && performance.now() < hintMessageUntil) {
+      _npcHintEl.textContent = hintMessage;
+      _npcHintEl.classList.remove('hidden');
+      _hintAction = null;
+    } else if (player._fishing) {
+      _npcHintEl.textContent = '🎣 Fishing...';
+      _npcHintEl.classList.remove('hidden');
+      _hintAction = null;
+    } else if (nearCarHint && !nearCarHint.occupied) {
       _npcHintEl.textContent = IS_MOBILE ? '🚗  Tap to enter car' : 'Press E to enter car';
       _npcHintEl.classList.remove('hidden');
       _hintAction = () => document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', bubbles: true }));
@@ -894,8 +939,9 @@ function loop(now) {
   renderer.clear();
   renderer.render(scene, camera);
   if (gameState === 'playing' || gameState === 'dialog' || gameState === 'shop') hand.render();
-  // In driving mode: clear block highlight and crack overlay
-  if (gameState === 'driving') { hlMesh.visible = false; crackMesh.visible = false; }
+  // Outside active play, clear the block highlight and crack overlay so they
+  // don't linger while driving or in dialogs/menus.
+  if (gameState !== 'playing') { hlMesh.visible = false; crackMesh.visible = false; }
 
   // Minimap — visible whenever the HUD is up
   if (gameState === 'playing' || gameState === 'dialog' || gameState === 'shop' || gameState === 'driving') {
