@@ -371,6 +371,15 @@ document.addEventListener('pointerlockchange', () => {
   }
 });
 
+// ── Build timestamp on home screen ───────────────────────────────────────────
+{
+  const el = document.getElementById('build-time');
+  if (el) {
+    const d = new Date(__BUILD_TIME__);
+    el.textContent = `Updated ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} ${d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+  }
+}
+
 // ── Menu buttons ──────────────────────────────────────────────────────────────
 document.getElementById('play-btn').addEventListener('click', startGame);
 
