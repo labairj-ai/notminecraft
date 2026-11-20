@@ -194,6 +194,17 @@ export class Player {
 
   // ── Block interaction (right-click) ───────────────────────────────────────
 
+  _editBlock(x, y, z, id, { anchor, tool } = {}, onSuccess = () => {}, onFailure = () => {}) {
+    if (!this.sharedEdit) {
+      this.world.setBlock(x, y, z, id);
+      onSuccess();
+      return;
+    }
+    const { x: ex, y: ey, z: ez } = this.camera.position;
+    this.sharedEdit({ x, y, z, id, anchor, tool, eye: { x: ex, y: ey, z: ez } })
+      .then(ok => ok ? onSuccess() : onFailure());
+  }
+
   _interact() {
     if (!this.target) return;
     const { wx, wy, wz, face } = this.target;
@@ -214,11 +225,11 @@ export class Player {
       const toggleCol = (cx, cy, cz) => {
         const b = this.world.getBlock(cx, cy, cz);
         if (b !== B.DOOR_CLOSED && b !== B.DOOR_OPEN) return;
-        this.world.setBlock(cx, cy, cz, nextState);
+        this._editBlock(cx, cy, cz, nextState);
         for (const dy of [1, -1]) {
           const bv = this.world.getBlock(cx, cy + dy, cz);
           if (bv === B.DOOR_CLOSED || bv === B.DOOR_OPEN) {
-            this.world.setBlock(cx, cy + dy, cz, nextState);
+            this._editBlock(cx, cy + dy, cz, nextState);
             break;
           }
         }
@@ -266,10 +277,10 @@ export class Player {
     if (!id) return;
     if (B.TOOL_DEFS[id] || B.ITEM_DEFS[id]) return; // can't place tools/materials
 
-    this.world.setBlock(nx, ny, nz, id);
-    // Consume one from the stack
+    if (this.sharedEdit && this.world.getBlock(nx, ny, nz) !== B.AIR) return;
     slot.count--;
     if (slot.count === 0) this.hotbar[this.selectedSlot] = null;
+    this._editBlock(nx, ny, nz, id, { anchor: { x: wx, y: wy, z: wz } }, undefined, () => this.addItem(id, 1));
   }
 
   // ── Block breaking ─────────────────────────────────────────────────────────
@@ -307,10 +318,12 @@ export class Player {
     this.breakProgress += dt;
 
     if (this.breakProgress >= this.effectiveBreakTime) {
-      if (id !== B.AIR && !B.getDef(id)?.unbreakable) {
-        this.world.setBlock(wx, wy, wz, B.AIR);
-        const drop = B.blockDrop(id);
-        this.addItem(drop.id, drop.count);
+      if (id !== B.AIR && id === this.breakTarget.id) {
+        const tool = this.hotbar[this.selectedSlot]?.id;
+        this._editBlock(wx, wy, wz, B.AIR, { tool }, () => {
+          const drop = B.blockDrop(id);
+          this.addItem(drop.id, drop.count);
+        });
       }
       this.breakTarget = null; this.breakProgress = 0;
     }

@@ -84,7 +84,7 @@ export async function selectObjective(state, options) {
           { role: 'system', content: 'Choose one feasible objective for a voxel-game Explorer using current energy, inventory, and recent experiences. Prefer an available first-tool objective over standalone gathering: a crafting objective includes gathering its missing materials. Consider whether stocked materials, a suitable site, and the lack of a structure justify building; compare that against other needs. Seek variety when well stocked. A proven resource site can be worth revisiting when you still need that material. Preserve energy before a difficult trip. Return only JSON {"choice":0,"reason":"one short sentence tied to the supplied facts"}. choice is the option index.' },
           { role: 'user', content: JSON.stringify({
             position: { x: state.x, y: state.y, z: state.z }, energy: state.energy,
-            equipment: B.getItemName(state.equippedTool) || 'none', structures: state.shelters ?? [],
+            equipment: B.getItemName(state.equippedTool) || 'none', structures: state.shelters ?? [], home: state.home,
             inventory: state.inventory.map(({ id, count }) => ({ item: B.getItemName(id), count })),
             avoided: { blockedEdges: Object.keys(state.obstacles).length, failedTargets: Object.keys(state.failedDestinations).length },
             memories,

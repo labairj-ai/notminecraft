@@ -8,6 +8,8 @@ import { createExplorerWorld, positionKey } from './world.js';
 import { objectiveOptions, selectObjective } from './objectives.js';
 import { availableSlot, countItem, craft, PICKAXE_GOAL, pickaxeStep, supplyStep, takeItems } from './crafting.js';
 
+import { gameOrigin, readEdit, recordPlayerEdit, refreshRoutes, session, validateEdit, voxelNeighbors } from './shared-world.js';
+import { distance, inspectHome, homeRoute } from './home.js';
 import { findShelter, SHELTER_GOAL, shelterPlan, validShelter } from './shelter.js';
 
 const SHELTER_BLOCKS = shelterPlan({ x: 0, y: 0, z: 0 }, [0, -1]).blocks.length;
@@ -43,6 +45,30 @@ if (state.destination && !state.objective) {
     label: state.destination.resource ? `Gather ${B.getItemName(B.blockDrop(state.destination.resource.id).id)}` : 'Explore terrain',
     status: 'active', source: 'legacy', reason: 'Resuming a saved objective from the previous version.', memories: []
   };
+}
+
+function publish(next) {
+  const maps = ['removedBlocks', 'placedBlocks'];
+  const changed = new Set();
+  for (const field of maps) {
+    for (const key of new Set([...Object.keys(state[field]), ...Object.keys(next[field])])) {
+      if (state[field][key] !== next[field][key]) changed.add(key);
+    }
+  }
+  if (changed.size) {
+    next.revision = (state.revision ?? 0) + 1;
+    next.voxelRevisions ??= {};
+    for (const key of changed) next.voxelRevisions[key] = next.revision;
+  }
+  save(next);
+  for (const field of maps) {
+    for (const key of Object.keys(state[field])) {
+      if (!Object.hasOwn(next[field], key)) delete state[field][key];
+    }
+    Object.assign(state[field], next[field]);
+    next[field] = state[field];
+  }
+  state = next;
 }
 
 function save(next) {
@@ -83,6 +109,46 @@ function finishObjective(next, status, outcome, details = {}) {
     remember(next, 'objective', status, `${objective.label} · ${outcome}`, { objectiveOutcome: finished });
   }
   next.destination = null;
+}
+
+function observeChanges(next) {
+  for (const [key, edit] of Object.entries(next.playerChanges ?? {})) {
+    if (distance(next, edit) > 8 || Math.abs(next.y-edit.y) > 4 ||
+        (next.observedChanges?.[key] ?? 0) >= edit.revision) continue;
+    (next.observedChanges ??= {})[key] = edit.revision;
+    const id = world.getBlock(edit.x, edit.y, edit.z);
+    if (id !== edit.id) continue;
+    const name = B.getItemName(id || edit.before);
+    remember(next, 'environment', 'success', id ? `Observed player-placed ${name}` : `Observed player removal of ${name}`, { block: edit });
+    if (!id) {
+      const known = next.discoveries.find(block => positionKey(block) === key && block.id === edit.before);
+      if (known) remember(next, 'environment', 'success', `Known ${name} resource is gone`, { block: known });
+      const resource = voxelNeighbors(edit).map(p => ({ ...p, id: world.getBlock(p.x,p.y,p.z) }))
+        .find(p => [B.STONE,B.COAL_ORE,B.IRON_ORE,B.GOLD_ORE,B.DIAMOND_ORE,B.WOOD].includes(p.id));
+      if (resource && !next.discoveries.some(block => sameBlock(block, resource))) {
+        next.discoveries = [...next.discoveries, resource].slice(-20);
+        remember(next, 'environment', 'success', `Discovered exposed ${B.getItemName(resource.id)}`, { block: resource });
+      }
+    }
+  }
+  inspectHome(world, next, remember);
+}
+
+function chooseHome(next) {
+  if (next.energy >= 45 || !next.home?.usable || distance(next, next.home.position) > 18) return false;
+  const route = homeRoute(world, next);
+  const reachable = !!route;
+  if (reachable !== next.home.reachable) {
+    next.home.reachable = reachable;
+    if (!reachable) remember(next, 'home', 'failed', 'Could not find a clear route home', { destination: next.home.position });
+  }
+  if (!route || route.length * 2 + 12 > next.energy) return false;
+  const label = 'Return home to recover';
+  next.objective = { kind: 'home', status: 'active', source: 'fallback', label, reason: 'Energy is low and home is within reach.' };
+  next.action = route.length ? 'navigate' : 'rest';
+  if (route.length) setDestination(next, { position: next.home.position, route });
+  remember(next, 'decision', 'selected', label, { source: 'fallback' });
+  return true;
 }
 
 function rest(next) {
@@ -375,6 +441,7 @@ function advanceBuilding(next) {
     next.action = 'inspect';
     work.step = 'Verified foundation, walls, entrance and roof';
     (next.shelters ??= []).push({ position: plan.center, entrance: plan.entrance, blocks: placed });
+    next.home ??= { position: plan.center, entrance: plan.entrance, complete: true, usable: true, reachable: true };
     progress(next, 'Verified the completed shelter');
     finishObjective(next, 'completed', `Verified shelter with ${placed} placed planks`, { position: plan.center });
     return;
@@ -403,7 +470,19 @@ function advance(next) {
     next.action = 'navigate';
     const step = world.stepTo(next, route[0].x, route[0].z);
     if (!step || positionKey(step) !== positionKey(route[0])) {
-      fail(next, 'Could not reach destination: route is blocked');
+      const blocked = route[0];
+      next.obstacles[`${positionKey(next)}>${blocked.x},${blocked.z}`] = { x: blocked.x, z: blocked.z };
+      const alternative = next.objective?.kind === 'home' ? homeRoute(world, next) :
+        world.survey(next, next.obstacles, 24).queue.find(entry => positionKey(entry.position) === positionKey(position))?.route;
+      if (alternative?.length && (next.objective?.kind !== 'home' || 2 * alternative.length + 8 <= next.energy)) {
+        next.destination.route = alternative;
+        remember(next, 'navigate', 'success', 'Adapted route around a new obstruction', { destination: position, block: blocked });
+        return;
+      }
+      if (next.objective?.kind === 'home') next.home.reachable = false;
+      next.failedDestinations[positionKey(resource ?? position)] = blocked;
+      remember(next, 'navigate', 'failed', 'Could not reach destination: route is blocked', { destination: position, block: blocked });
+      finishObjective(next, 'failed', 'Could not reach destination: route is blocked');
       return;
     }
     Object.assign(next, step);
@@ -415,7 +494,10 @@ function advance(next) {
     if (visits) remember(next, 'navigate', 'success', 'Revisited familiar terrain');
     if (!route.length && !resource) {
       remember(next, 'navigate', 'success', 'Reached exploration destination', { destination: position });
-      if (next.objective?.progress) next.destination = null;
+      if (next.objective?.kind === 'home') {
+        next.destination = null;
+        remember(next, 'home', 'success', 'Returned home through the shelter entrance', { destination: position });
+      } else if (next.objective?.progress) next.destination = null;
       else finishObjective(next, 'completed', 'Reached destination');
     }
     return;
@@ -443,14 +525,9 @@ function advance(next) {
   if (Date.now() < readyAt) return;
   if (next.inventory[slot]) next.inventory[slot].count += drop.count;
   else next.inventory.push({ ...drop });
+  delete next.placedBlocks[positionKey(resource)];
   next.removedBlocks[positionKey(resource)] = resource.id;
-  // A removed voxel can change clearance at either end of a remembered edge.
-  for (const [key, obstacle] of Object.entries(next.obstacles)) {
-    const [x, , z] = key.split('>')[0].split(',').map(Number);
-    if ((x === resource.x && z === resource.z) || (obstacle.x === resource.x && obstacle.z === resource.z)) {
-      delete next.obstacles[key];
-    }
-  }
+  refreshRoutes(next, resource);
   next.energy -= 6;
   const tool = B.getToolAction(next.equippedTool) === B.getDef(resource.id)?.action ? next.equippedTool : undefined;
   const outcome = `Collected ${B.getItemName(drop.id)}${tool ? ` with ${B.getItemName(tool)}` : ''}`;
@@ -471,19 +548,44 @@ function advance(next) {
   finishObjective(next, 'completed', outcome);
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin || '';
-  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+  const authorized = gameOrigin(origin);
+  if (authorized || (req.method === 'GET' && req.url === '/state' && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
   }
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
+  const send = (status, data) => { res.writeHead(status); res.end(JSON.stringify(data)); };
   if (req.method === 'GET' && req.url === '/state') {
-    res.end(JSON.stringify({ ...state, online: true }));
-  } else {
-    res.writeHead(404);
-    res.end(JSON.stringify({ error: 'Not found' }));
+    if (authorized) {
+      res.setHeader('Access-Control-Expose-Headers', 'X-Explorer-Session');
+      res.setHeader('X-Explorer-Session', session);
+    }
+    return send(200, { ...state, online: true });
+  }
+  if (req.url !== '/edit') return send(404, { error: 'Not found' });
+  if (!authorized) return send(403, { error: 'Local Explorer game required' });
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Methods', 'POST');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Explorer-Session');
+    res.writeHead(204).end();
+    return;
+  }
+  if (req.method !== 'POST' || req.headers['x-explorer-session'] !== session ||
+      req.headers['content-type'] !== 'application/json') return send(403, { error: 'Local game session required' });
+  try {
+    const edit = await readEdit(req);
+    const status = validateEdit(world, state, edit);
+    if (status !== 200) return send(status, { error: status === 409 ? 'That block changed; try again' : 'Invalid block edit' });
+    const next = structuredClone(state);
+    recordPlayerEdit(next, edit);
+    publish(next);
+    return send(200, { revision: state.revision });
+  } catch (err) {
+    console.error('Could not save player edit:', err);
+    return send(500, { error: 'World save failed' });
   }
 });
 
@@ -496,12 +598,22 @@ async function tick() {
   if (busy) return;
   busy = true;
   try {
-    const next = structuredClone(state);
+    const base = state;
+    const next = structuredClone(base);
     next.tick++;
+    observeChanges(next);
     if (next.objective?.kind === 'rest' && next.objective.status === 'active') {
       rest(next);
       if (next.energy >= 75) finishObjective(next, 'completed', `Recovered to ${next.energy} energy`);
-    } else if (next.energy < 25 && (next.destination || next.objective?.status === 'active')) {
+    } else if (next.objective?.kind === 'home' && next.objective.status === 'active' && !next.home?.usable) {
+      finishObjective(next, 'failed', 'Home is damaged or obstructed; recovery there was cancelled');
+    } else if (next.objective?.kind === 'home' && next.objective.status === 'active' && !next.destination) {
+      rest(next);
+      if (next.energy >= 75) {
+        remember(next, 'home', 'success', `Rested at home and recovered to ${next.energy} energy`);
+        finishObjective(next, 'completed', 'Recovered at home');
+      }
+    } else if (next.energy < 25 && next.objective?.kind !== 'home' && (next.destination || next.objective?.status === 'active')) {
       rest(next);
     } else if (next.destination) {
       advance(next);
@@ -509,18 +621,13 @@ async function tick() {
       advanceCraft(next);
     } else if (['shelter', 'supplies'].includes(next.objective?.kind) && next.objective.status === 'active') {
       advanceBuilding(next);
-    } else {
+    } else if (!chooseHome(next)) {
       await plan(next);
     }
     next.lastTickAt = Date.now();
     next.updatedAt = new Date(next.lastTickAt).toISOString();
-    save(next);
-    // Keep the generator cache and publish changed voxels only after the save.
-    Object.assign(state.removedBlocks, next.removedBlocks);
-    next.removedBlocks = state.removedBlocks;
-    Object.assign(state.placedBlocks, next.placedBlocks);
-    next.placedBlocks = state.placedBlocks;
-    state = next;
+    // A player edit may have committed while the optional model request was pending.
+    if (state === base) publish(next);
   } catch (err) {
     console.error('Explorer tick failed:', err);
   } finally {

@@ -54,7 +54,7 @@ function agentFixture(modelEnv = { AGENT_LLM: 'off' }) {
     proc = null;
   }
 
-  return { start, readState, stop, statePath, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  return { start, readState, stop, statePath, get url() { return url; }, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
 async function waitFor(readState, predicate, timeout = 18000) {
@@ -418,5 +418,138 @@ test('Shelter with unreachable wood makes no placements and records the unmet pr
   } finally {
     await stop();
     cleanup();
+  }
+});
+
+function homeFixture() {
+  const plan = shelterPlan({ x: -2, y: 34, z: 14 }, [0, -1]);
+  const placedBlocks = Object.fromEntries(plan.blocks.map(block => [positionKey(block), B.PLANKS]));
+  const world = createExplorerWorld(4242, {}, placedBlocks);
+  const origin = plan.center;
+  return { plan, world, state: {
+    ...origin, version: 2, seed: 4242, energy: 51, tick: 0, name: 'Explorer',
+    inventory: [], memory: [], obstacles: {}, failedDestinations: {}, discoveries: [],
+    visited: { [positionKey(origin)]: 1 }, placedBlocks, removedBlocks: {},
+    shelters: [{ position: origin, entrance: plan.entrance, blocks: 23 }]
+  } };
+}
+
+test('Explorer leaves an existing shelter, returns on low energy and persists home recovery', async () => {
+  const fixture = agentFixture();
+  const { plan, world, state } = homeFixture();
+  const destination = world.survey(plan.center, {}).queue.find(entry => entry.route.length === 6);
+  state.destination = destination;
+  state.objective = { kind: 'explore', label: 'Explore nearby terrain', status: 'active' };
+  writeFileSync(fixture.statePath, JSON.stringify(state));
+  try {
+    await fixture.start(125);
+    const away = await waitFor(fixture.readState, s => positionKey(s) === positionKey(destination.position));
+    assert.equal(away.energy, 39);
+    const returning = await waitFor(fixture.readState, s => s.objective?.kind === 'home' && s.destination);
+    assert.equal(positionKey(returning.destination.route.at(-2)), positionKey(plan.entrance));
+    const recovered = await waitFor(fixture.readState, s => s.lastObjectiveOutcome?.detail === 'Recovered at home');
+    assert.equal(positionKey(recovered), positionKey(plan.center));
+    assert.ok(recovered.energy >= 75);
+    assert.ok(recovered.memory.some(e => e.outcome.includes('Returned home through')));
+    assert.ok(recovered.memory.some(e => e.outcome.includes('Rested at home')));
+    await waitFor(fixture.readState, s => s.objective?.kind !== 'home');
+    await fixture.stop();
+    const saved = JSON.parse(readFileSync(fixture.statePath));
+    assert.deepEqual(await fixture.start(5000), { ...saved, online: true });
+    assert.deepEqual(saved.home.position, plan.center);
+  } finally {
+    await fixture.stop();
+    fixture.cleanup();
+  }
+});
+
+async function playerEdit(fixture, edit, origin = 'http://localhost:5177', withToken = true) {
+  const response = await fetch(fixture.url, { headers: { Origin: origin } });
+  const token = response.headers.get('X-Explorer-Session');
+  return fetch(new URL('/edit', fixture.url), { method: 'POST', headers: {
+    Origin: origin, 'Content-Type': 'application/json', 'X-Explorer-Session': withToken ? token ?? '' : ''
+  }, body: JSON.stringify({ seed: 4242, ...edit }) });
+}
+
+test('Local edits are authorized, revision-checked, rerouted around and persisted with observations', async () => {
+  const fixture = agentFixture();
+  const { plan, world, state } = homeFixture();
+  Object.assign(state, plan.outside, { energy: 90 });
+  const destination = world.survey(plan.outside, {}).queue.find(entry => entry.route.length === 4 &&
+    entry.route[0].x === -3 && entry.route[0].y === plan.outside.y);
+  const cell = destination.route[0];
+  const key = positionKey(cell);
+  const anchor = { ...cell, y: cell.y-1 };
+  const eye = { x: cell.x-.5,y:cell.y+1.62,z:cell.z+.5 };
+  state.destination = destination;
+  state.objective = { kind: 'explore', label: 'Walk the route', status: 'active' };
+  writeFileSync(fixture.statePath, JSON.stringify(state));
+  try {
+    await fixture.start(700);
+    const place = { ...cell, id: B.PLANKS, before: B.AIR, revision: 0, eye, anchor };
+    assert.equal((await playerEdit(fixture, place, 'https://example.org')).status, 403);
+    assert.equal((await playerEdit(fixture, place, undefined, false)).status, 403);
+    const response = await playerEdit(fixture, place);
+    assert.equal(response.status, 200);
+    const { revision } = await response.json();
+    assert.equal((await playerEdit(fixture, place)).status, 409);
+    const changed = await waitFor(fixture.readState, s => s.memory.some(e => e.outcome.includes('Adapted route') || e.outcome.includes('route is blocked')));
+    assert.equal(changed.placedBlocks[key], B.PLANKS);
+    assert.ok(changed.memory.some(e => e.outcome === 'Observed player-placed Planks'));
+    assert.ok(Object.keys(changed.obstacles).some(edge => edge.endsWith(`>${cell.x},${cell.z}`)));
+    assert.equal((await playerEdit(fixture, { ...place, id: B.AIR, before: B.PLANKS, revision })).status, 200);
+    const cleared = await waitFor(fixture.readState, s => s.memory.some(e => e.outcome === 'Observed player removal of Planks'));
+    assert.ok(!Object.keys(cleared.obstacles).some(edge => edge.endsWith(`>${cell.x},${cell.z}`)));
+    assert.notEqual(cleared.voxelRevisions[key], revision);
+    assert.equal((await playerEdit(fixture, place)).status, 409, 'reject stale edit even though the old voxel value returned');
+
+    const wall = plan.blocks[0];
+    const wallKey = positionKey(wall);
+    const removed = await playerEdit(fixture, { ...wall, id: B.AIR, before: B.PLANKS, revision: 0,
+      eye: { x: wall.x+.5,y:wall.y+1.62,z:wall.z-1 } });
+    assert.equal(removed.status, 200);
+    const damaged = await waitFor(fixture.readState, s => s.home?.complete === false);
+    assert.equal(damaged.home.usable, false);
+    assert.ok(damaged.memory.some(e => e.outcome.includes('found shelter damage')));
+    assert.equal(damaged.placedBlocks[wallKey], undefined);
+    await fixture.stop();
+    const saved = JSON.parse(readFileSync(fixture.statePath));
+    const restarted = await fixture.start(5000);
+    assert.deepEqual(restarted, { ...saved, online: true });
+    assert.equal(createExplorerWorld(4242, restarted.removedBlocks, restarted.placedBlocks).getBlock(wall.x,wall.y,wall.z), B.AIR);
+  } finally {
+    await fixture.stop();
+    fixture.cleanup();
+  }
+});
+
+test('Explorer notices nearby exposed wood but does not perceive distant player edits', async () => {
+  const fixture = agentFixture();
+  const { world, state } = homeFixture();
+  state.energy = 28;
+  state.objective = { kind: 'rest', label: 'Recover energy', status: 'active' };
+  const near = { x: -5, y: 36, z: 12 };
+  const far = { x: 22, y: 33, z: 44 };
+  const wood = { x: -5, y: 36, z: 13 };
+  assert.equal(world.getBlock(...positionKey(wood).split(',').map(Number)), B.WOOD);
+  writeFileSync(fixture.statePath, JSON.stringify(state));
+  try {
+    await fixture.start(400);
+    for (const p of [far, near]) {
+      const before = world.getBlock(p.x,p.y,p.z);
+      assert.equal(before, B.LEAVES);
+      const response = await playerEdit(fixture, {
+        ...p, before, id: B.AIR, revision: 0, eye: { x:p.x+.5,y:p.y+.5,z:p.z-.5 }
+      });
+      assert.equal(response.status, 200);
+    }
+    const observed = await waitFor(fixture.readState, s => s.memory.some(e => e.outcome === 'Discovered exposed Wood Log'));
+    assert.ok(observed.discoveries.some(block => positionKey(block) === positionKey(wood)));
+    assert.equal(observed.removedBlocks[positionKey(far)], B.LEAVES);
+    assert.equal(observed.observedChanges[positionKey(far)], undefined);
+    assert.ok(!observed.memory.some(e => e.block && positionKey(e.block) === positionKey(far)));
+  } finally {
+    await fixture.stop();
+    fixture.cleanup();
   }
 });

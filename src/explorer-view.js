@@ -37,6 +37,45 @@ export function createExplorerView(scene, world, player, resumeGame) {
   let movedAt = 0;
   let inFlight = false;
   let lastFetch = -Infinity;
+  let session;
+  let minimumRevision = 0;
+  let voxelRevisions = {};
+  let editStatus = '';
+  const pending = new Set();
+  const api = 'http://127.0.0.1:8787';
+
+  player.sharedEdit = async edit => {
+    const key = `${edit.x},${edit.y},${edit.z}`;
+    if (!session || !snapshot) {
+      editStatus = 'Shared world unavailable';
+      return false;
+    }
+    if (pending.has(key)) return false;
+    pending.add(key);
+    try {
+      const response = await fetch(api + '/edit', {
+        method: 'POST', signal: AbortSignal.timeout(4000),
+        headers: { 'Content-Type': 'application/json', 'X-Explorer-Session': session },
+        body: JSON.stringify({ ...edit, seed: world.seed, revision: voxelRevisions[key] ?? 0,
+          before: world.getBlock(edit.x, edit.y, edit.z) })
+      });
+      const result = await response.json();
+      if (!response.ok) throw Error(result.error);
+      minimumRevision = Math.max(minimumRevision, result.revision);
+      if (result.revision >= (voxelRevisions[key] ?? 0)) {
+        voxelRevisions[key] = result.revision;
+        world.applyExplorerEdits(edit.id ? {} : { [key]: true }, edit.id ? { [key]: edit.id } : {});
+      }
+      editStatus = '';
+      return true;
+    } catch (err) {
+      editStatus = err.message;
+      return false;
+    } finally {
+      pending.delete(key);
+      fetchState();
+    }
+  };
 
   async function fetchState() {
     if (inFlight) return;
@@ -44,11 +83,15 @@ export function createExplorerView(scene, world, player, resumeGame) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2500);
     try {
-      const response = await fetch('http://127.0.0.1:8787/state', { signal: controller.signal });
+      const response = await fetch(api + '/state', { signal: controller.signal });
       if (!response.ok) throw new Error('Agent not available');
       const next = await response.json();
       if (next.seed !== world.seed) throw new Error('World seed mismatch');
       if (next.version !== 2) throw new Error('Update the local Explorer service');
+      if ((next.revision ?? 0) < minimumRevision) return;
+      session = response.headers.get('X-Explorer-Session');
+      minimumRevision = next.revision ?? 0;
+      voxelRevisions = next.voxelRevisions ?? {};
       world.applyExplorerEdits(next.removedBlocks, next.placedBlocks);
       if (!snapshot || snapshot.x !== next.x || snapshot.y !== next.y || snapshot.z !== next.z) {
         previous = snapshot;
@@ -70,6 +113,9 @@ export function createExplorerView(scene, world, player, resumeGame) {
       const recent = [context.findLast(entry => entry.objectiveOutcome), ...context.slice(-2)]
         .filter((entry, index, entries) => entry && entries.indexOf(entry) === index);
       const setback = next.memory.findLast(entry => entry.result === 'failed');
+      const home = next.home;
+      const environment = next.memory.findLast(entry => entry.action === 'environment');
+      const reaction = next.memory.findLast(entry => entry.action === 'home' || entry.outcome.startsWith('Adapted route'));
       const lastAI = next.lastAIDecision;
       const progress = objective?.progress;
       const toolOutcome = next.memory.findLast(entry => entry.tool && entry.action === 'mine');
@@ -77,6 +123,11 @@ export function createExplorerView(scene, world, player, resumeGame) {
       info.textContent = [
         `Explorer · ${next.action} · Energy ${next.energy}`,
         `Position ${coords(next)}`,
+        home && `Home · ${coords(home.position)} · ${home.complete == null ? 'Uninspected' : home.complete ? home.usable === false ? 'Obstructed' : 'Intact' : 'Damaged'}${home.reachable === false ? ' / route blocked' : home.reachable ? ' / reachable' : ''}`,
+        objective?.kind === 'home' && objective.status === 'active' && (destination ? 'Returning home' : 'Resting at home'),
+        environment && `Environment · ${environment.outcome}`,
+        reaction && `Reaction · ${reaction.outcome}`,
+        editStatus && `Shared world · ${editStatus}`,
         objective && `Objective · ${objective.label} (${objective.status})`,
         progress && `Step · ${progress.step}`,
         progress?.completed.length > 0 && `Completed · ${progress.completed.join(' / ')}`,

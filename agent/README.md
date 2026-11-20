@@ -20,7 +20,7 @@ npm run dev -- --port 5177 --strictPort
 
 Open [NotMinecraft with Explorer](http://localhost:5177/notminecraft/?explorer). The panel shows the active objective, source, reason, decision context, latest objective outcome, and time of the last successful model decision. It also displays activity, destination, inventory, and discoveries. **Visit Explorer** takes you to the character.
 
-The service runs with the browser closed. Each tick atomically saves the active objective, its route, position, inventory, memories, and block placements and removals to `data/explorer.json`. The Explorer view applies those placements and removals to both loaded and newly generated chunks. Browser player edits are local to their game session and aren't sent back to the agent. Explorer does not fight, swim, or climb ladders.
+The service runs with the browser closed. Each tick atomically saves the active objective, its route, position, inventory, memories, and block placements and removals to `data/explorer.json`. The Explorer view applies those placements and removals to both loaded and newly generated chunks. On the local Explorer page at port 5177, ordinary placement and mining use the same saved world as Explorer. Edits carry the revision of the target block and are rejected if stale. The service accepts writes from the local Explorer page with a per-process session token. Ordinary game sessions remain separate. Explorer does not fight, swim, or climb ladders.
 
 ## Crafting a first tool
 
@@ -31,6 +31,12 @@ The objective, progress, equipped tool, table, and mined blocks persist across r
 ## Building a shelter
 
 Explorer can choose a shelter when its survey finds a dry, level foundation and enough nearby or stocked wood. Its construction plan uses 23 planks for two-block-high walls, an open entrance, and a roof over a natural foundation. Stocked planks count toward the requirement. The same recipe dependency code supplies planks for construction, basic supplies, and the pickaxe. Explorer places one supported block per tick, then checks the foundation, entrance, walls, and roof before recording the shelter. The site, progress, and placed blocks survive restarts. Remembered unsuitable sites are skipped in later surveys.
+
+## Home and player changes
+
+Explorer recognizes its first completed shelter as home, checks the structure when nearby, and tries to return through the entrance when energy is low and the route is short enough. If a player blocks the route, Explorer tries an alternate path. Nearby player edits can reveal resources or change the home's condition. Explorer remembers what it observes and clears affected route failures when terrain changes.
+
+With Vite running on port 5177, run `npm run test:browser` to exercise normal Chrome controls against an isolated Explorer save. Set `AGENT_LLM=on` to also verify a real local model decision after the changes.
 
 ## Local LLM
 

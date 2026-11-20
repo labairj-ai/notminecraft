@@ -28,12 +28,12 @@ export function shelterPlan(center, direction) {
   return { center, entrance, outside, floor, blocks };
 }
 
-export function validShelter(world, plan, progress = 0) {
+export function validShelter(world, plan, progress = 0, checkApproach = true, checkEntrance = true) {
   const block = ({ x, y, z }) => world.getBlock(x, y, z);
   const clear = p => block(p) === B.AIR && block({ ...p, y: p.y + 1 }) === B.AIR;
   if (plan.center.y + 2 >= CHUNK_HEIGHT || !plan.floor.every(p => ground.includes(block(p)))) return false;
-  if (!clear(plan.center) || !clear(plan.entrance) || !clear(plan.outside)) return false;
-  if (!ground.includes(block({ ...plan.outside, y: plan.outside.y - 1 }))) return false;
+  if ((checkEntrance && (!clear(plan.center) || !clear(plan.entrance))) || (checkApproach && !clear(plan.outside))) return false;
+  if (checkApproach && !ground.includes(block({ ...plan.outside, y: plan.outside.y - 1 }))) return false;
   return plan.blocks.every((p, index) => block(p) === (index < progress ? B.PLANKS : B.AIR));
 }
 
