@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createExplorerView } from './explorer-view.js';
 import { World } from './world.js';
 import { Player } from './player.js';
 import { UI } from './ui.js';
@@ -111,11 +112,12 @@ function updateCrackOverlay(progress, target) {
 }
 
 // ── World / Player / UI / Hand ────────────────────────────────────────────────
-const world   = new World(scene);
+const world   = new World(scene, new URLSearchParams(location.search).has('explorer') ? 4242 : undefined);
 const player  = new Player(camera, world);
 const ui      = new UI(player, world);
 const hand    = new FirstPersonHand(renderer);
 const minimap = new Minimap(document.getElementById('minimap'), world);
+const explorerView = createExplorerView(scene, world, player);
 
 let mobileControls = null;
 if (IS_MOBILE) {
@@ -822,6 +824,7 @@ function loop(now) {
   requestAnimationFrame(loop);
   const dt = Math.min((now - lastTime) / 1000, 0.05);
   lastTime = now;
+  explorerView.update(now);
 
   const isMoving = player.active &&
     (player.keys['KeyW'] || player.keys['KeyS'] ||
