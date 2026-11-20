@@ -43,7 +43,7 @@ function fallback() {
 async function choose() {
   const safe = fallback();
   // The local model is optional and consulted once per decision, not per frame.
-  if (!USE_LLM) return safe;
+  if (!USE_LLM || state.tick % 20 !== 0) return safe;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 4500);
   try {
