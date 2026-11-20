@@ -168,8 +168,9 @@ function rest(next) {
 }
 
 function survey(next) {
+  const radius = 8;
   const { queue, obstacles } = next.energy < 25 ? { queue: [], obstacles: [] } : world.survey(
-    { x: next.x, y: next.y, z: next.z }, next.obstacles
+    { x: next.x, y: next.y, z: next.z }, next.obstacles, radius
   );
   for (const { key, x, z } of obstacles) {
     next.obstacles[key] = { x, z };
@@ -189,7 +190,10 @@ function survey(next) {
     route.length > 0 && !next.failedDestinations[positionKey(position)]
   ).sort((a, b) => (next.visited[positionKey(a.position)] ?? 0) -
     (next.visited[positionKey(b.position)] ?? 0) || b.route.length - a.route.length);
-  return { resources: [...resources.values()], frontier: frontiers[0], queue };
+  // If the survey exhausted this component, a route through only known cells offers no exploration.
+  const frontier = frontiers.some(({ position }) => !next.visited[positionKey(position)]) ||
+    queue.some(({ route }) => route.length === radius) ? frontiers[0] : undefined;
+  return { resources: [...resources.values()], frontier, queue };
 }
 
 async function plan(next) {

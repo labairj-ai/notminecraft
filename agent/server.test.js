@@ -750,3 +750,34 @@ test('Real Ollama evaluates the two matched worlds', { skip: process.env.AGENT_R
     }));
   }
 });
+
+test('A fully explored enclosure does not offer another exploration circuit', async () => {
+  const { plan, state } = homeFixture();
+  state.energy = 54;
+  state.inventory = [{ id: B.WOOD, count: 6 }];
+  state.placedBlocks[positionKey(plan.outside)] = B.PLANKS;
+  state.placedBlocks[positionKey({ ...plan.outside, y: plan.outside.y + 1 })] = B.PLANKS;
+  const world = createExplorerWorld(state.seed, {}, state.placedBlocks);
+  const { queue } = world.survey(plan.center, {});
+  assert.equal(queue.length, 2, 'both interior and entrance are reachable');
+  state.visited = Object.fromEntries(queue.map(({ position }) => [positionKey(position), 30]));
+
+  let considered;
+  const model = await modelFixture(prompt => {
+    considered = prompt.options;
+    return modelChoice(prompt.options.findIndex(option => option.kind === 'rest'), 'Navigation cannot expose new terrain');
+  });
+  const fixture = agentFixture(model.env);
+  writeFileSync(fixture.statePath, JSON.stringify(state));
+  try {
+    await fixture.start(150);
+    const choice = await waitFor(fixture.readState, s => s.objective?.status === 'active');
+    assert.ok(considered.some(option => option.kind === 'craft'));
+    assert.ok(!considered.some(option => option.kind === 'explore'));
+    assert.equal(choice.objective.kind, 'rest');
+  } finally {
+    await fixture.stop();
+    await model.stop();
+    fixture.cleanup();
+  }
+});
