@@ -1,4 +1,5 @@
 import * as B from '../src/blocks.js';
+import { experienceContext, objectiveActivity, preference } from './experience.js';
 import { positionKey } from './world.js';
 
 const URL = process.env.LLM_URL || 'http://127.0.0.1:11434/v1/chat/completions';
@@ -18,6 +19,7 @@ export function objectiveOptions(state, resources, frontier) {
     Number(b.route.length >= 2) - Number(a.route.length >= 2) ||
     a.route.length - b.route.length
   );
+  const activityFor = target => B.getDef(target.resource.id)?.requiresTool ? 'mining' : 'gathering';
   const types = new Set();
   for (const target of ranked) {
     const drop = B.blockDrop(target.resource.id);
@@ -25,7 +27,7 @@ export function objectiveOptions(state, resources, frontier) {
     types.add(drop.id);
     const item = B.getItemName(drop.id);
     const count = state.inventory.reduce((total, slot) => total + (slot.id === drop.id ? slot.count : 0), 0);
-    options.push({ kind: 'gather', label: `Gather ${item}`, reason: `${count} in inventory; a block is reachable.`, target });
+    options.push({ kind: 'gather', activity: activityFor(target), label: `Gather ${item}`, reason: `${count} in inventory; a block is reachable.`, target });
     if (types.size === 3) break;
   }
 
@@ -35,7 +37,7 @@ export function objectiveOptions(state, resources, frontier) {
     const target = revisitable.find(({ resource }) => nearSite(known, resource));
     const name = B.getItemName(B.blockDrop(target.resource.id).id);
     const revisit = {
-      kind: 'revisit', label: `Revisit a ${name} site`, target,
+      kind: 'revisit', activity: activityFor(target), label: `Revisit a ${name} site`, target,
       reason: `A matching block is reachable near the remembered discovery at ${positionKey(known)}.`,
       site: known
     };
@@ -68,8 +70,12 @@ export async function selectObjective(state, options) {
   const memories = recent.map(({ at, outcome, block, destination, objectiveOutcome, tool, produced }) => ({
     at, outcome, block, destination, objectiveOutcome, tool, produced
   }));
-  const fallback = options.find(option => !['craft', 'shelter', 'supplies'].includes(option.kind) || option.ready) ?? options[0];
-  const result = { choice: fallback, source: 'fallback', reason: fallback.reason, memories };
+  const experience = experienceContext(state);
+  const eligible = options.filter(option => !['craft', 'shelter', 'supplies'].includes(option.kind) || option.ready);
+  const fallback = (eligible.length ? eligible : options).reduce((best, option) =>
+    preference(experience, option) > preference(experience, best) ? option : best
+  );
+  const result = { choice: fallback, source: 'fallback', reason: fallback.reason, memories, experience };
   if (!USE_LLM) return { ...result, sourceNote: 'Model disabled' };
   if (options.length < 2) return { ...result, sourceNote: 'Only one feasible objective' };
   if (Date.now() < (state.retryModelAt ?? 0)) return { ...result, sourceNote: 'Model retry pending' };
@@ -81,15 +87,15 @@ export async function selectObjective(state, options) {
       body: JSON.stringify({
         model: MODEL, max_tokens: 110, temperature: 0,
         messages: [
-          { role: 'system', content: 'Choose one feasible objective for a voxel-game Explorer using current energy, inventory, and recent experiences. Prefer an available first-tool objective over standalone gathering: a crafting objective includes gathering its missing materials. Consider whether stocked materials, a suitable site, and the lack of a structure justify building; compare that against other needs. Seek variety when well stocked. A proven resource site can be worth revisiting when you still need that material. Preserve energy before a difficult trip. Return only JSON {"choice":0,"reason":"one short sentence tied to the supplied facts"}. choice is the option index.' },
+          { role: 'system', content: 'Choose one feasible objective for a voxel-game Explorer using current energy, inventory, and recent experiences. Prefer an available first-tool objective over standalone gathering: a crafting objective includes gathering its missing materials. Consider whether stocked materials, a suitable site, and the lack of a structure justify building; compare that against other needs. Consider learned interests as preferences and success/failure counts as evidence of reliability. Prefer variety after several recent choices in one activity, while keeping needs and feasible opportunities first. A proven resource site can be worth revisiting when you still need that material. Preserve energy before a difficult trip. Return only JSON {"choice":0,"reason":"one short sentence tied to the supplied facts"}. choice is the option index.' },
           { role: 'user', content: JSON.stringify({
             position: { x: state.x, y: state.y, z: state.z }, energy: state.energy,
             equipment: B.getItemName(state.equippedTool) || 'none', structures: state.shelters ?? [], home: state.home,
             inventory: state.inventory.map(({ id, count }) => ({ item: B.getItemName(id), count })),
             avoided: { blockedEdges: Object.keys(state.obstacles).length, failedTargets: Object.keys(state.failedDestinations).length },
-            memories,
-            options: options.map(({ kind, label, reason, target, site }) => ({
-              kind, label, fact: reason, position: target?.position, steps: target?.route.length, block: target?.resource, site
+            memories, experience,
+            options: options.map(option => ({
+              kind: option.kind, label: option.label, activity: objectiveActivity(option), fact: option.reason, position: option.target?.position, steps: option.target?.route.length, block: option.target?.resource, site: option.site
             }))
           }) }
         ]
@@ -103,7 +109,7 @@ export async function selectObjective(state, options) {
       throw Error('Model returned an invalid objective');
     }
     delete state.retryModelAt;
-    return { choice: options[choice], source: 'llm', reason: reason.trim().slice(0, 240), memories, model: reply.model ?? MODEL };
+    return { choice: options[choice], source: 'llm', reason: reason.trim().slice(0, 240), memories, experience, model: reply.model ?? MODEL };
   } catch (err) {
     state.retryModelAt = Date.now() + 60000;
     return { ...result, sourceNote: err.message };

@@ -5,6 +5,7 @@ import path from 'node:path';
 import * as B from '../src/blocks.js';
 import { CHUNK_HEIGHT } from '../src/terrain.js';
 import { createExplorerWorld, positionKey } from './world.js';
+import { initializeExperience, objectiveActivity, recordChoice, recordExperience } from './experience.js';
 import { objectiveOptions, selectObjective } from './objectives.js';
 import { availableSlot, countItem, craft, PICKAXE_GOAL, pickaxeStep, supplyStep, takeItems } from './crafting.js';
 
@@ -104,6 +105,12 @@ function finishObjective(next, status, outcome, details = {}) {
       if (status === 'failed') next.craftRetryAt = next.tick + 40;
       else next.pickaxeUsed = true;
     }
+    const activity = objectiveActivity(objective);
+    const result = status === 'completed' ? 'success' : 'failure';
+    if (['exploration', 'construction'].includes(activity) ||
+        (status === 'failed' && ['gathering', 'mining'].includes(activity))) {
+      recordExperience(next, activity, result, objective.kind, outcome);
+    }
     const finished = { label: objective.label, status, detail: outcome, ...details };
     next.lastObjectiveOutcome = finished;
     remember(next, 'objective', status, `${objective.label} · ${outcome}`, { objectiveOutcome: finished });
@@ -127,7 +134,9 @@ function observeChanges(next) {
         .find(p => [B.STONE,B.COAL_ORE,B.IRON_ORE,B.GOLD_ORE,B.DIAMOND_ORE,B.WOOD].includes(p.id));
       if (resource && !next.discoveries.some(block => sameBlock(block, resource))) {
         next.discoveries = [...next.discoveries, resource].slice(-20);
-        remember(next, 'environment', 'success', `Discovered exposed ${B.getItemName(resource.id)}`, { block: resource });
+        const discovery = `Discovered exposed ${B.getItemName(resource.id)}`;
+        remember(next, 'environment', 'success', discovery, { block: resource });
+        if (B.getDef(resource.id)?.requiresTool) recordExperience(next, 'mining', 'success', 'exposed:' + resource.id, discovery, false);
       }
     }
   }
@@ -147,6 +156,7 @@ function chooseHome(next) {
   next.objective = { kind: 'home', status: 'active', source: 'fallback', label, reason: 'Energy is low and home is within reach.' };
   next.action = route.length ? 'navigate' : 'rest';
   if (route.length) setDestination(next, { position: next.home.position, route });
+  recordChoice(next, next.objective);
   remember(next, 'decision', 'selected', label, { source: 'fallback' });
   return true;
 }
@@ -222,14 +232,18 @@ async function plan(next) {
   }
   if (options.length === 1 && options[0].kind === 'rest' &&
       next.energy >= 75 && next.lastObjectiveOutcome?.label === options[0].label) return;
-  const { choice, source, reason, sourceNote, memories, model } = await selectObjective(next, options);
+  const { choice, source, reason, sourceNote, memories, model, experience } = await selectObjective(next, options);
   const at = new Date().toISOString();
   next.objective = {
     at, kind: choice.kind, label: choice.label, status: 'active', source, sourceNote, reason,
-    fact: choice.reason, memories, site: choice.site, model,
+    fact: choice.reason, memories, site: choice.site, model, activity: objectiveActivity(choice), experience,
     alternatives: options.filter(option => option !== choice).map(option => option.label)
   };
-  remember(next, 'decision', 'selected', choice.label, { source, reason, sourceNote });
+  recordChoice(next, choice);
+  remember(next, 'decision', 'selected', choice.label, {
+    source, reason, sourceNote,
+    supplied: source === 'llm' ? { ...experience, memories: memories.map(entry => entry.outcome) } : undefined
+  });
   if (source === 'llm') {
     next.lastAIDecision = { at, goal: choice.label, reason, model };
   }
@@ -252,6 +266,7 @@ function setDestination(next, goal) {
   const name = B.getItemName(goal.resource.id);
   if (!next.discoveries.some(resource => sameBlock(resource, goal.resource))) {
     next.discoveries = [...next.discoveries, goal.resource].slice(-20);
+    next.destination.newDiscovery = true;
     remember(next, 'explore', 'success', `Discovered ${name}`, { block: goal.resource });
   }
 }
@@ -282,10 +297,12 @@ function performRecipeStep(next, step, table) {
     progressState.step = `Craft ${name}`;
     const result = craft(next.inventory, step.recipe, table ? 3 : 2);
     if (result.error) {
+      recordExperience(next, 'crafting', 'failure', 'recipe:' + step.recipe.result.id, result.error);
       finishObjective(next, 'failed', result.error);
       return true;
     }
     next.inventory = result.inventory;
+    recordExperience(next, 'crafting', 'success', 'recipe:' + result.produced.id, `Crafted ${name}`);
     progress(next, `Crafted ${name} ×${result.produced.count}`);
     remember(next, 'craft', 'success', `Crafted ${name} ×${result.produced.count}`, {
       consumed: result.consumed, produced: result.produced, table: step.recipe.size === 3 ? table : undefined
@@ -476,11 +493,13 @@ function advance(next) {
         world.survey(next, next.obstacles, 24).queue.find(entry => positionKey(entry.position) === positionKey(position))?.route;
       if (alternative?.length && (next.objective?.kind !== 'home' || 2 * alternative.length + 8 <= next.energy)) {
         next.destination.route = alternative;
+        next.destination.adapted = true;
         remember(next, 'navigate', 'success', 'Adapted route around a new obstruction', { destination: position, block: blocked });
         return;
       }
       if (next.objective?.kind === 'home') next.home.reachable = false;
       next.failedDestinations[positionKey(resource ?? position)] = blocked;
+      recordExperience(next, 'navigation', 'failure', 'blocked', 'Route blocked');
       remember(next, 'navigate', 'failed', 'Could not reach destination: route is blocked', { destination: position, block: blocked });
       finishObjective(next, 'failed', 'Could not reach destination: route is blocked');
       return;
@@ -492,6 +511,8 @@ function advance(next) {
     const visits = next.visited[key] ?? 0;
     next.visited[key] = visits + 1;
     if (visits) remember(next, 'navigate', 'success', 'Revisited familiar terrain');
+    if (!route.length) recordExperience(next, 'navigation', 'success', 'arrival',
+      next.destination.adapted ? 'Reached destination after rerouting' : 'Reached destination');
     if (!route.length && !resource) {
       remember(next, 'navigate', 'success', 'Reached exploration destination', { destination: position });
       if (next.objective?.kind === 'home') {
@@ -519,6 +540,13 @@ function advance(next) {
   }
   if (!readyAt) {
     remember(next, 'inspect', 'success', `Inspected ${name}`, { block: resource });
+    if (next.destination.newDiscovery) {
+      const discovery = `Reached and inspected newly discovered ${name}`;
+      recordExperience(next, 'exploration', 'success', 'discovery:' + resource.id, discovery, false);
+      if (B.getDef(resource.id)?.requiresTool) {
+        recordExperience(next, 'mining', 'success', 'discovery:' + resource.id, discovery, false);
+      }
+    }
     next.destination.readyAt = Date.now() + INTERVAL + duration * 1000;
     return;
   }
@@ -531,6 +559,8 @@ function advance(next) {
   next.energy -= 6;
   const tool = B.getToolAction(next.equippedTool) === B.getDef(resource.id)?.action ? next.equippedTool : undefined;
   const outcome = `Collected ${B.getItemName(drop.id)}${tool ? ` with ${B.getItemName(tool)}` : ''}`;
+  const activity = B.getDef(resource.id)?.requiresTool ? 'mining' : 'gathering';
+  recordExperience(next, activity, 'success', 'block:' + drop.id, outcome);
   remember(next, 'mine', 'success', outcome, { block: resource, drop, tool });
   if (next.objective?.kind === 'craft') {
     if (excavating) next.objective.progress.digSite.blockers.shift();
@@ -601,6 +631,7 @@ async function tick() {
     const base = state;
     const next = structuredClone(base);
     next.tick++;
+    initializeExperience(next);
     observeChanges(next);
     if (next.objective?.kind === 'rest' && next.objective.status === 'active') {
       rest(next);

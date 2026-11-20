@@ -7,7 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "agent": "node agent/server.js",
-    "check:agent": "node --check agent/server.js && node --check agent/world.js && node --check agent/crafting.js && node --check agent/shelter.js && node --check agent/home.js && node --check agent/shared-world.js && node --check agent/objectives.js && node --check src/explorer-view.js",
+    "check:agent": "node --check agent/server.js && node --check agent/world.js && node --check agent/crafting.js && node --check agent/shelter.js && node --check agent/home.js && node --check agent/shared-world.js && node --check agent/objectives.js && node --check agent/experience.js && node --check src/explorer-view.js",
     "test:agent": "node --test agent/server.test.js",
     "test:browser": "node --test agent/browser.test.js"
   },

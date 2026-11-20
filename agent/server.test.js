@@ -6,6 +6,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import * as B from '../src/blocks.js';
+import { experienceContext, initializeExperience, preference, recordExperience, recordChoice } from './experience.js';
 import { RECIPES } from '../src/crafting.js';
 import { craft, PICKAXE_GOAL, supplyStep } from './crafting.js';
 import { findShelter, SHELTER_GOAL, shelterPlan, validShelter } from './shelter.js';
@@ -551,5 +552,201 @@ test('Explorer notices nearby exposed wood but does not perceive distant player 
   } finally {
     await fixture.stop();
     fixture.cleanup();
+  }
+});
+
+function learningFixture(inventory = []) {
+  return {
+    version: 2, seed: 4242, name: 'Explorer', x: -2, y: 34, z: 14, tick: 0, energy: 100,
+    inventory, memory: [], obstacles: {}, failedDestinations: {}, discoveries: [],
+    visited: { '-2,34,14': 1 }, placedBlocks: {}, removedBlocks: {}
+  };
+}
+
+async function modelFixture(handler) {
+  const model = http.createServer(async (req, res) => {
+    try {
+      const chunks = [];
+      for await (const part of req) chunks.push(part);
+      const request = JSON.parse(Buffer.concat(chunks));
+      const prompt = JSON.parse(request.messages[1].content);
+      const answer = await handler(prompt, request);
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify(answer));
+    } catch (error) {
+      res.writeHead(502).end(JSON.stringify({ error: error.message }));
+    }
+  });
+  await new Promise(resolve => model.listen(0, '127.0.0.1', resolve));
+  return {
+    env: { AGENT_LLM: 'on', LLM_URL: `http://127.0.0.1:${model.address().port}/v1/chat/completions` },
+    stop: () => new Promise(resolve => model.close(resolve))
+  };
+}
+
+const modelChoice = (choice, reason) => ({
+  model: 'controlled-model', choices: [{ message: { content: JSON.stringify({ choice, reason }) } }]
+});
+
+test('Verified exploration increases neutral interest with diminishing gains and restarts intact', async () => {
+  const model = await modelFixture(prompt => modelChoice(
+    prompt.options.findIndex(option => option.kind === 'explore'), 'Exercise a feasible exploration choice'
+  ));
+  const fixture = agentFixture(model.env);
+  const initial = learningFixture();
+  initializeExperience(initial);
+  assert.deepEqual(Object.values(initial.experience.interests), [50,50,50,50,50]);
+  writeFileSync(fixture.statePath, JSON.stringify(initial));
+  try {
+    await fixture.start(125);
+    const reached = await waitFor(fixture.readState, s => s.experience.competence.exploration.success === 3);
+    assert.deepEqual(reached.experience.recentChanges.filter(e => e.activity === 'exploration').map(e => e.delta), [3,2,1]);
+    assert.equal(reached.experience.interests.exploration, 56);
+    assert.equal(reached.experience.competence.navigation.success, 3);
+    assert.ok(reached.tick > 12, 'movement ticks do not count as attempts');
+    assert.equal(reached.experience.competence.gathering.success, 0);
+    assert.ok(reached.memory.some(entry => entry.supplied?.interests.exploration === 53));
+    await fixture.stop();
+    const saved = JSON.parse(readFileSync(fixture.statePath));
+    assert.deepEqual(await fixture.start(5000), { ...saved, online: true });
+  } finally {
+    await fixture.stop();
+    await model.stop();
+    fixture.cleanup();
+  }
+});
+
+test('One successful recipe and one rejected recipe produce a 50% crafting success rate', async () => {
+  const fixture = agentFixture();
+  const initial = learningFixture([{ id: B.WOOD, count: 1 }]);
+  initial.objective = { kind: 'supplies', label: 'Craft planks for supplies', status: 'active',
+    progress: { completed: [], searches: 0 } };
+  try {
+    writeFileSync(fixture.statePath, JSON.stringify(initial));
+    await fixture.start(150);
+    const success = await waitFor(fixture.readState, s => s.experience?.competence.crafting.success === 1);
+    await fixture.stop();
+    const failedInput = {
+      ...success, inventory: [{ id: B.WOOD, count: 2 }, ...Array.from({ length: 26 }, () => ({ id: B.STONE, count: 64 }))],
+      objective: { ...initial.objective, progress: { completed: [], searches: 0 } }
+    };
+    writeFileSync(fixture.statePath, JSON.stringify(failedInput));
+    await fixture.start(150);
+    const failed = await waitFor(fixture.readState, s => s.experience.competence.crafting.failure === 1);
+    assert.deepEqual(failed.experience.competence.crafting, { success: 1, failure: 1 });
+    assert.equal(experienceContext(failed).competence.crafting.rate, 50);
+    assert.deepEqual(failed.inventory, failedInput.inventory);
+    assert.equal(failed.lastObjectiveOutcome.detail, 'Inventory is full');
+    assert.equal(failed.experience.interests.crafting, 52);
+    assert.equal(failed.experience.competence.navigation.success, 0);
+  } finally {
+    await fixture.stop();
+    fixture.cleanup();
+  }
+});
+
+test('Repeated success and failure keep preference history bounded without changing feasibility', () => {
+  const state = learningFixture();
+  for (let i = 0; i < 1000; i++) {
+    recordChoice(state, { kind: 'gather' });
+    recordExperience(state, 'gathering', 'success', 'same wood', 'Collected Wood Log');
+    recordExperience(state, 'gathering', 'failure', 'same wood', 'Could not reach Wood Log');
+  }
+  assert.equal(state.experience.interests.gathering, 55);
+  assert.deepEqual(state.experience.competence.gathering, { success: 1000, failure: 1000 });
+  assert.equal(state.experience.recentChoices.length, 12);
+  assert.equal(state.experience.recentOutcomes.gathering.length, 8);
+  assert.equal(state.experience.recentChanges.length, 4);
+});
+
+test('Recent repetition can outweigh modest interest without making an activity infeasible', () => {
+  const state = learningFixture();
+  const gather = { kind: 'gather' };
+  const explore = { kind: 'explore' };
+  for (let i = 0; i < 3; i++) recordExperience(state, 'gathering', 'success', 'wood', 'Collected Wood Log');
+  assert.ok(preference(experienceContext(state), gather) > preference(experienceContext(state), explore));
+  for (let i = 0; i < 3; i++) recordChoice(state, gather);
+  const context = experienceContext(state);
+  assert.equal(context.interests.gathering, 56);
+  assert.ok(preference(context, gather) < preference(context, explore));
+});
+
+async function pairedHistories(handler) {
+  const prompts = [];
+  const model = await modelFixture((prompt, request) => {
+    prompts.push(prompt);
+    return handler(prompt, request);
+  });
+  const decisions = [];
+  try {
+    for (const [activity, detail] of [
+      ['construction', 'Verified shelter with 23 placed planks'],
+      ['exploration', 'Reached an unfamiliar destination']
+    ]) {
+      const fixture = agentFixture(model.env);
+      const initial = learningFixture([{ id: B.WOOD, count: 6 }, { id: B.TOOL_PICKAXE, count: 1 }]);
+      initial.equippedTool = B.TOOL_PICKAXE;
+      initial.pickaxeUsed = true;
+      for (let i = 0; i < 5; i++) {
+        recordExperience(initial, activity, 'success', activity, detail);
+        recordChoice(initial, { kind: activity === 'construction' ? 'shelter' : 'explore' });
+        initial.memory.push({
+          at: new Date(1000 * i).toISOString(), action: 'objective', result: 'completed', outcome: detail,
+          objectiveOutcome: { label: activity, status: 'completed', detail }
+        });
+      }
+      writeFileSync(fixture.statePath, JSON.stringify(initial));
+      try {
+        await fixture.start(500);
+        const chosen = await waitFor(fixture.readState, s => s.objective?.source, 25000);
+        assert.equal(chosen.objective.source, 'llm', chosen.objective.sourceNote);
+        assert.equal(chosen.objective.experience.interests[activity], 56);
+        assert.deepEqual(chosen.objective.experience.competence[activity], { success:5, failure:0, rate:100 });
+        assert.ok(chosen.objective.memories.some(e => e.outcome === detail));
+        assert.deepEqual(chosen.memory.find(e => e.action === 'decision').supplied.interests, chosen.objective.experience.interests);
+        decisions.push(chosen.objective);
+      } finally {
+        await fixture.stop();
+        fixture.cleanup();
+      }
+    }
+    assert.equal(prompts.length, 2);
+    const [{ experience: a, memories: am, ...worldA }, { experience: b, memories: bm, ...worldB }] = prompts;
+    assert.deepEqual(worldA, worldB, 'terrain, equipment, inventory, energy and feasible options match');
+    assert.notDeepEqual(a, b);
+    assert.notDeepEqual(am, bm);
+    assert.ok(worldA.options.some(option => option.kind === 'shelter'));
+    assert.ok(worldA.options.some(option => option.kind === 'explore'));
+    return { decisions, prompts };
+  } finally {
+    await model.stop();
+  }
+}
+
+test('Matched world scenarios send different experience to the same model policy', async () => {
+  const { decisions } = await pairedHistories(prompt => {
+    const best = prompt.options.reduce((a, b) =>
+      (prompt.experience.interests[b.activity] ?? 50) > (prompt.experience.interests[a.activity] ?? 50) ? b : a);
+    return modelChoice(prompt.options.indexOf(best), 'Choose the strongest learned preference among feasible options');
+  });
+  assert.deepEqual(decisions.map(option => option.kind), ['shelter', 'explore']);
+});
+
+test('Real Ollama evaluates the two matched worlds', { skip: process.env.AGENT_REAL_LEARNING !== 'on' }, async () => {
+  const { decisions, prompts } = await pairedHistories(async (prompt, request) => {
+    const response = await fetch(process.env.LLM_URL ?? 'http://127.0.0.1:11434/v1/chat/completions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request), signal: AbortSignal.timeout(19000)
+    });
+    assert.ok(response.ok, `Ollama returned HTTP ${response.status}`);
+    return response.json();
+  });
+  for (const [i, objective] of decisions.entries()) {
+    console.log(JSON.stringify({
+      scenario: i ? 'exploration history' : 'construction history',
+      model: objective.model, choice: objective.label, reason: objective.reason,
+      experience: prompts[i].experience, memories: prompts[i].memories.map(e => e.outcome),
+      options: prompts[i].options.map(e => e.label)
+    }));
   }
 });

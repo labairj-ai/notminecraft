@@ -188,7 +188,10 @@ test('Chrome places and mines shared blocks; Explorer reroutes and notices shelt
     await send('Page.navigate', { url: 'about:blank' });
     await openGame();
     assert.equal(await evaluate(`window.__world().getBlock(${positionKey(wall)})`), AIR);
-    assert.match(await panel(), /Home · .*Damaged/);
+    const restoredPanel = await panel();
+    assert.match(restoredPanel, /Home · .*Damaged/);
+    assert.match(restoredPanel, /Interests · exploration/);
+    assert.match(restoredPanel, /Competence · .*navigation/);
     console.log('Chrome placement, reload, reroute, obstacle removal, damage and restart verified');
   } catch (error) {
     console.error(error.stack);

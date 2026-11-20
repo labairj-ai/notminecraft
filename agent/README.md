@@ -38,6 +38,18 @@ Explorer recognizes its first completed shelter as home, checks the structure wh
 
 With Vite running on port 5177, run `npm run test:browser` to exercise normal Chrome controls against an isolated Explorer save. Set `AGENT_LLM=on` to also verify a real local model decision after the changes.
 
+## Experience and preferences
+
+Exploration, gathering, crafting, construction, and mining each start at 50 interest. Verified outcomes change interest by up to three points. Similar recent successes give smaller gains, and repeated failures carry no additional penalty while those failures remain recent. Competence is counted separately as successful and unsuccessful attempts, including navigation arrivals and failed routes. Existing saves keep their memories and begin counting from the first tick after upgrade.
+
+Explorer includes interests, competence, recent choices, interest changes, and relevant memories in its model requests. The fallback also weighs these signals when ranking feasible choices. Routine movement, crafting, and recovery still use the existing game rules.
+
+To compare the real Ollama model on two matched scenarios, run:
+
+```sh
+AGENT_REAL_LEARNING=on node --test --test-name-pattern='Real Ollama' agent/server.test.js
+```
+
 ## Local LLM
 
 Explorer defaults to the existing Ollama service at `127.0.0.1:11434`, with `qwen2.5:7b` as its model. It asks the model to choose among feasible objectives when a new objective is needed and multiple options are available. Those options include exploration, gathering, revisiting an accessible remembered resource site, crafting basic supplies or equipment, building a shelter, and resting when energy is low. The prompt includes inventory, energy, route lengths, and recent experiences and objective outcomes. A selected objective persists until it finishes or fails. Navigation, mining, inventory, and emergency rest use deterministic game rules.

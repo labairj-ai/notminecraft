@@ -113,6 +113,10 @@ export function createExplorerView(scene, world, player, resumeGame) {
       const recent = [context.findLast(entry => entry.objectiveOutcome), ...context.slice(-2)]
         .filter((entry, index, entries) => entry && entries.indexOf(entry) === index);
       const setback = next.memory.findLast(entry => entry.result === 'failed');
+      const experience = next.experience;
+      const counts = experience && Object.entries(experience.selected).sort((a, b) => b[1] - a[1]).slice(0, 3);
+      const changes = experience?.recentChanges.slice(-2) ?? [];
+      const suppliedChanges = objective?.source === 'llm' ? objective.experience?.recentChanges : null;
       const home = next.home;
       const environment = next.memory.findLast(entry => entry.action === 'environment');
       const reaction = next.memory.findLast(entry => entry.action === 'home' || entry.outcome.startsWith('Adapted route'));
@@ -143,6 +147,14 @@ export function createExplorerView(scene, world, player, resumeGame) {
         objective && `${objective.source === 'llm' ? 'Model reason' : 'Reason'} · ${objective.reason}`,
         objective?.site && `Remembered site · ${coords(objective.site)}`,
         recent.length > 0 && `Decision context · ${recent.map(entry => entry.outcome).join(' / ')}`,
+        experience && `Interests · ${Object.entries(experience.interests).map(([activity, score]) => `${activity} ${score}`).join(' / ')}`,
+        counts?.length > 0 && `Most chosen · ${counts.map(([activity, count]) => `${activity} ×${count}`).join(' / ')}`,
+        experience && `Competence · ${Object.entries(experience.competence).map(([activity, { success, failure }]) =>
+          `${activity} ${success}/${success + failure}`).join(' / ')} (successes/attempts)`,
+        changes.length > 0 && `Interest changes · ${changes.map(({ activity, delta, reason }) =>
+          `${activity} ${delta > 0 ? '+' : ''}${delta} (${reason})`).join(' / ')}`,
+        suppliedChanges?.length > 0 && `Interest context sent · ${suppliedChanges.map(({ activity, score, reason }) =>
+          `${activity} ${score} (${reason})`).join(' / ')}`,
         setback && `Recent setback · ${setback.outcome}`,
         outcome && `Latest outcome · ${outcome.status} / ${outcome.label} / ${outcome.detail}`,
         `Last successful LLM decision · ${lastAI ? new Date(lastAI.at).toLocaleString() : 'None yet'}`,
