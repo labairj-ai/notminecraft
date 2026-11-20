@@ -63,18 +63,26 @@ export function createExplorerView(scene, world, player, resumeGame) {
       for (const { id, count } of next.inventory) inventory.set(id, (inventory.get(id) ?? 0) + count);
       const items = [...inventory].map(([id, count]) => `${B.getItemName(id)} ×${count}`);
       const discoveries = next.discoveries.slice(-3).map(block => `${B.getItemName(block.id)} ${coords(block)}`);
-      const successful = next.memory.findLast(entry => entry.result === 'success');
-      const failed = next.memory.findLast(entry => entry.result === 'failed');
+      const objective = next.objective;
+      const decisionSource = { llm: 'LLM', fallback: 'Fallback', legacy: 'Previous version' }[objective?.source];
+      const outcome = next.lastObjectiveOutcome;
+      const context = objective?.memories ?? [];
+      const recent = [context.findLast(entry => entry.objectiveOutcome), ...context.slice(-2)]
+        .filter((entry, index, entries) => entry && entries.indexOf(entry) === index);
+      const lastAI = next.lastAIDecision;
       info.textContent = [
         `Explorer · ${next.action} · Energy ${next.energy}`,
         `Position ${coords(next)}`,
+        objective && `Objective · ${objective.label} (${objective.status})`,
         destination && `Destination ${coords(destination)}${resource ? ` · ${B.getItemName(resource.id)}` : ''}`,
+        objective && `Decision · ${decisionSource}${objective.sourceNote ? ` / ${objective.sourceNote}` : ''}`,
+        objective && `${objective.source === 'llm' ? 'Model reason' : 'Reason'} · ${objective.reason}`,
+        objective?.site && `Remembered site · ${coords(objective.site)}`,
+        recent.length > 0 && `Decision context · ${recent.map(entry => entry.outcome).join(' / ')}`,
+        outcome && `Latest outcome · ${outcome.status} / ${outcome.label} / ${outcome.detail}`,
+        `Last successful LLM decision · ${lastAI ? new Date(lastAI.at).toLocaleString() : 'None yet'}`,
         `Inventory · ${items.join(', ') || 'Empty'}`,
-        `Discoveries · ${discoveries.join(', ') || 'None yet'}`,
-        successful && `Latest success · ${successful.outcome}`,
-        failed && `Latest failure · ${failed.outcome}`,
-        `Recent memories · ${next.memory.slice(-3).map(entry => entry.outcome).join(' / ') || 'None yet'}`,
-        `Last AI decision · ${next.lastAIDecision ? `${next.lastAIDecision.goal} ${coords(next.lastAIDecision.position)}` : 'None yet'}`
+        `Discoveries · ${discoveries.join(', ') || 'None yet'}`
       ].filter(Boolean).join('\n');
     } catch (err) {
       snapshot = null;

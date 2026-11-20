@@ -4,12 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as B from '../src/blocks.js';
 import { createExplorerWorld, positionKey } from './world.js';
+import { objectiveOptions, selectObjective } from './objectives.js';
 
 const PORT = Number(process.env.AGENT_PORT || 8787);
 const STORE = process.env.AGENT_DATA || path.resolve('data/explorer.json');
-const LLM_URL = process.env.LLM_URL || 'http://127.0.0.1:8080/v1/chat/completions';
-const LLM_MODEL = process.env.LLM_MODEL || 'local';
-const USE_LLM = process.env.AGENT_LLM !== 'off';
 const INTERVAL = Math.max(50, Number(process.env.AGENT_INTERVAL_MS || 5000));
 const SLOTS = 27;
 
@@ -32,6 +30,14 @@ if (!resumed) {
     ...state, ...spawn, version: 2, action: 'explore', inventory: [], destination: null,
     visited: { [positionKey(spawn)]: 1 },
     obstacles: {}, failedDestinations: {}, discoveries: [], lastAIDecision: null
+  };
+}
+
+if (state.destination && !state.objective) {
+  state.objective = {
+    kind: state.destination.resource ? 'gather' : 'explore',
+    label: state.destination.resource ? `Gather ${B.getItemName(B.blockDrop(state.destination.resource.id).id)}` : 'Explore terrain',
+    status: 'active', source: 'legacy', reason: 'Resuming a saved objective from the previous version.', memories: []
   };
 }
 
@@ -64,45 +70,28 @@ function sameBlock(a, b) {
   return a.id === b.id && positionKey(a) === positionKey(b);
 }
 
-async function selectGoal(next, options) {
-  if (!USE_LLM || options.length < 2 || Date.now() - (next.lastModelAttempt ?? 0) < 600000) return options[0];
-  next.lastModelAttempt = Date.now();
-  try {
-    const response = await fetch(LLM_URL, {
-      method: 'POST', signal: AbortSignal.timeout(4500),
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: LLM_MODEL, max_tokens: 70, temperature: 0.4,
-        messages: [
-          { role: 'system', content: 'Choose one goal for a voxel-game character. Return JSON only with the zero-based option index: {"choice":0}.' },
-          { role: 'user', content: JSON.stringify({
-            energy: next.energy, inventory: next.inventory, recentExperiences: next.memory.slice(-5),
-            options: options.map(({ resource, position, route }) => ({
-              goal: resource ? `Collect ${B.getItemName(resource.id)}` : 'Explore new terrain',
-              position, steps: route.length
-            }))
-          }) }
-        ]
-      })
-    });
-    if (!response.ok) return options[0];
-    const output = (await response.json()).choices?.[0]?.message?.content || '';
-    const { choice } = JSON.parse(output.match(/\{[^]*?\}/)?.[0] ?? output);
-    if (Number.isInteger(choice) && options[choice]) {
-      const { resource, position } = options[choice];
-      next.lastAIDecision = {
-        at: new Date().toISOString(), position, goal: resource ? `Collect ${B.getItemName(resource.id)}` : 'Explore new terrain'
-      };
-      return options[choice];
-    }
-  } catch {
-    // The same validated options drive the deterministic fallback.
+function finishObjective(next, status, outcome) {
+  const objective = next.objective;
+  if (objective) {
+    objective.status = status;
+    const finished = { label: objective.label, status, detail: outcome };
+    next.lastObjectiveOutcome = finished;
+    remember(next, 'objective', status, `${objective.label} · ${outcome}`, { objectiveOutcome: finished });
   }
-  return options[0];
+  next.destination = null;
+}
+
+function rest(next) {
+  next.action = 'rest';
+  next.energy = Math.min(100, next.energy + 24);
+  remember(next, 'rest', 'success', 'Recovered energy');
 }
 
 async function plan(next) {
-  const { queue, obstacles } = world.survey({ x: next.x, y: next.y, z: next.z }, next.obstacles);
+  const lowEnergy = next.energy < 25;
+  const { queue, obstacles } = lowEnergy ? { queue: [], obstacles: [] } : world.survey(
+    { x: next.x, y: next.y, z: next.z }, next.obstacles
+  );
   for (const { key, x, z } of obstacles) {
     next.obstacles[key] = { x, z };
     remember(next, 'explore', 'failed', `Blocked terrain toward ${x}, ${z}`);
@@ -118,26 +107,30 @@ async function plan(next) {
       resources.set(key, { ...entry, resource });
     }
   }
-  const candidates = [...resources.values()].sort((a, b) =>
-    Number(b.resource.id === B.WOOD) - Number(a.resource.id === B.WOOD) ||
-    Number(b.route.length >= 2) - Number(a.route.length >= 2) ||
-    a.route.length - b.route.length
-  ).slice(0, 3);
   const frontier = queue.filter(({ position, route }) =>
     route.length > 0 && !next.failedDestinations[positionKey(position)]
   ).sort((a, b) => (next.visited[positionKey(a.position)] ?? 0) -
     (next.visited[positionKey(b.position)] ?? 0) || b.route.length - a.route.length)[0];
-  if (frontier) candidates.push(frontier);
-
-  next.action = 'explore';
-  if (!candidates.length) {
+  const options = objectiveOptions(next, resources.values(), frontier);
+  if (options.length === 1 && options[0].kind === 'rest' &&
+      next.energy >= 75 && next.lastObjectiveOutcome?.label === options[0].label) return;
+  const { choice, source, reason, sourceNote, memories, model } = await selectObjective(next, options);
+  const at = new Date().toISOString();
+  next.objective = {
+    at, kind: choice.kind, label: choice.label, status: 'active', source, sourceNote, reason,
+    fact: choice.reason, memories, site: choice.site, model
+  };
+  remember(next, 'decision', 'selected', choice.label, { source, reason, sourceNote });
+  if (source === 'llm') {
+    next.lastAIDecision = { at, goal: choice.label, reason, model };
+  }
+  if (choice.kind === 'rest') {
     next.action = 'rest';
-    if (!next.memory.some(entry => entry.outcome === 'No reachable destination')) {
-      remember(next, 'explore', 'failed', 'No reachable destination');
-    }
     return;
   }
-  const goal = await selectGoal(next, candidates);
+
+  next.action = 'explore';
+  const goal = choice.target;
   next.destination = goal;
   if (!goal.resource) return;
   const name = B.getItemName(goal.resource.id);
@@ -151,7 +144,7 @@ function fail(next, outcome) {
   const { position, resource } = next.destination;
   next.failedDestinations[positionKey(resource ?? position)] = true;
   remember(next, next.action, 'failed', outcome, { destination: position, block: resource });
-  next.destination = null;
+  finishObjective(next, 'failed', outcome);
 }
 
 function advance(next) {
@@ -172,7 +165,7 @@ function advance(next) {
     if (visits) remember(next, 'navigate', 'success', 'Revisited familiar terrain');
     if (!route.length && !resource) {
       remember(next, 'navigate', 'success', 'Reached exploration destination', { destination: position });
-      next.destination = null;
+      finishObjective(next, 'completed', 'Reached destination');
     }
     return;
   }
@@ -209,7 +202,7 @@ function advance(next) {
   }
   next.energy -= 6;
   remember(next, 'mine', 'success', `Collected ${B.getItemName(drop.id)}`, { block: resource, drop });
-  next.destination = null;
+  finishObjective(next, 'completed', `Collected ${B.getItemName(drop.id)}`);
 }
 
 const server = http.createServer((req, res) => {
@@ -239,10 +232,11 @@ async function tick() {
   try {
     const next = structuredClone(state);
     next.tick++;
-    if (next.energy < 25) {
-      next.action = 'rest';
-      next.energy = Math.min(100, next.energy + 24);
-      remember(next, 'rest', 'success', 'Recovered energy');
+    if (next.objective?.kind === 'rest' && next.objective.status === 'active') {
+      rest(next);
+      if (next.energy >= 75) finishObjective(next, 'completed', `Recovered to ${next.energy} energy`);
+    } else if (next.destination && next.energy < 25) {
+      rest(next);
     } else if (next.destination) {
       advance(next);
     } else {
