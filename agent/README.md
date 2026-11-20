@@ -20,7 +20,13 @@ npm run dev -- --port 5177 --strictPort
 
 Open [NotMinecraft with Explorer](http://localhost:5177/notminecraft/?explorer). The panel shows the active objective, source, reason, decision context, latest objective outcome, and time of the last successful model decision. It also displays activity, destination, inventory, and discoveries. **Visit Explorer** takes you to the character.
 
-The service runs with the browser closed. Each tick atomically saves the active objective, its route, position, inventory, memories, and block removals to `data/explorer.json`. The Explorer view applies those removals to both loaded and newly generated chunks. Browser player edits are local to their game session and aren't sent back to the agent. Explorer does not craft, fight, swim, or climb ladders.
+The service runs with the browser closed. Each tick atomically saves the active objective, its route, position, inventory, memories, and block placements and removals to `data/explorer.json`. The Explorer view applies those placements and removals to both loaded and newly generated chunks. Browser player edits are local to their game session and aren't sent back to the agent. Explorer does not fight, swim, or climb ladders.
+
+## Crafting a first tool
+
+Explorer can choose the wooden pickaxe recipe as a multi-step objective. Starting with an empty inventory and no nearby table, it gathers three logs, turns them into twelve planks, spends two planks for four sticks and four planks for a crafting table, then places the table on a supported block. At the table it spends three planks and two sticks on the pickaxe. The game uses the same pickaxe item for the wooden and stone recipes and labels it **Stone Pickaxe**. The goal finishes when Explorer equips it and mines a block that requires a pickaxe.
+
+The objective, progress, equipped tool, table, and mined blocks persist across restarts. Explorer derives its next step from the current inventory, with bounded searches for missing resources. It records failed objectives when materials, a supported table position, inventory space, or a tool-compatible block are unavailable.
 
 ## Local LLM
 

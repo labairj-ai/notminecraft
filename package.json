@@ -7,7 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "agent": "node agent/server.js",
-    "check:agent": "node --check agent/server.js && node --check agent/world.js && node --check agent/objectives.js && node --check src/explorer-view.js",
+    "check:agent": "node --check agent/server.js && node --check agent/world.js && node --check agent/crafting.js && node --check agent/objectives.js && node --check src/explorer-view.js",
     "test:agent": "node --test agent/server.test.js"
   },
   "dependencies": {

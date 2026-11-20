@@ -49,7 +49,7 @@ export function createExplorerView(scene, world, player, resumeGame) {
       const next = await response.json();
       if (next.seed !== world.seed) throw new Error('World seed mismatch');
       if (next.version !== 2) throw new Error('Update the local Explorer service');
-      world.applyExplorerEdits(next.removedBlocks);
+      world.applyExplorerEdits(next.removedBlocks, next.placedBlocks);
       if (!snapshot || snapshot.x !== next.x || snapshot.y !== next.y || snapshot.z !== next.z) {
         previous = snapshot;
         movedAt = performance.now();
@@ -70,10 +70,19 @@ export function createExplorerView(scene, world, player, resumeGame) {
       const recent = [context.findLast(entry => entry.objectiveOutcome), ...context.slice(-2)]
         .filter((entry, index, entries) => entry && entries.indexOf(entry) === index);
       const lastAI = next.lastAIDecision;
+      const progress = objective?.progress;
+      const toolOutcome = next.memory.findLast(entry => entry.tool && entry.action === 'mine');
+      const craftOutcome = next.memory.findLast(entry => entry.action === 'craft');
       info.textContent = [
         `Explorer · ${next.action} · Energy ${next.energy}`,
         `Position ${coords(next)}`,
         objective && `Objective · ${objective.label} (${objective.status})`,
+        progress && `Step · ${progress.step}`,
+        progress?.completed.length > 0 && `Completed · ${progress.completed.join(' / ')}`,
+        progress && `Missing · ${progress.missing.map(({ id, count }) => `${B.getItemName(id)} ×${count}`).join(', ') || 'None'}`,
+        `Equipped · ${B.getItemName(next.equippedTool) || 'None'}`,
+        craftOutcome && `Last craft · ${craftOutcome.outcome}`,
+        toolOutcome && `Last tool use · ${toolOutcome.outcome}`,
         destination && `Destination ${coords(destination)}${resource ? ` · ${B.getItemName(resource.id)}` : ''}`,
         objective && `Decision · ${decisionSource}${objective.sourceNote ? ` / ${objective.sourceNote}` : ''}`,
         objective && `${objective.source === 'llm' ? 'Model reason' : 'Reason'} · ${objective.reason}`,

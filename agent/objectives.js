@@ -63,12 +63,12 @@ function nearSite(site, resource) {
 
 export async function selectObjective(state, options) {
   const outcomes = state.memory.filter(entry => entry.objectiveOutcome).slice(-3);
-  const observations = state.memory.filter(entry => !entry.objectiveOutcome && (entry.block || entry.result === 'failed')).slice(-5);
+  const observations = state.memory.filter(entry => !entry.objectiveOutcome && (entry.block || entry.action === 'craft' || entry.action === 'equip' || entry.result === 'failed')).slice(-5);
   const recent = [...outcomes, ...observations].sort((a, b) => a.at.localeCompare(b.at));
-  const memories = recent.map(({ at, outcome, block, destination, objectiveOutcome }) => ({
-    at, outcome, block, destination, objectiveOutcome
+  const memories = recent.map(({ at, outcome, block, destination, objectiveOutcome, tool, produced }) => ({
+    at, outcome, block, destination, objectiveOutcome, tool, produced
   }));
-  const fallback = options[0];
+  const fallback = options.find(option => option.kind !== 'craft' || option.ready) ?? options[0];
   const result = { choice: fallback, source: 'fallback', reason: fallback.reason, memories };
   if (!USE_LLM) return { ...result, sourceNote: 'Model disabled' };
   if (options.length < 2) return { ...result, sourceNote: 'Only one feasible objective' };
@@ -81,7 +81,7 @@ export async function selectObjective(state, options) {
       body: JSON.stringify({
         model: MODEL, max_tokens: 110, temperature: 0,
         messages: [
-          { role: 'system', content: 'Choose one feasible objective for a voxel-game Explorer using current energy, inventory, and recent experiences. Seek variety when well stocked. A proven resource site can be worth revisiting when you still need that material. Preserve energy before a difficult trip. Return only JSON {"choice":0,"reason":"one short sentence tied to the supplied facts"}. choice is the option index.' },
+          { role: 'system', content: 'Choose one feasible objective for a voxel-game Explorer using current energy, inventory, and recent experiences. Prefer an available first-tool objective over standalone gathering: a crafting objective includes gathering its missing materials. Seek variety when well stocked. A proven resource site can be worth revisiting when you still need that material. Preserve energy before a difficult trip. Return only JSON {"choice":0,"reason":"one short sentence tied to the supplied facts"}. choice is the option index.' },
           { role: 'user', content: JSON.stringify({
             position: { x: state.x, y: state.y, z: state.z }, energy: state.energy,
             inventory: state.inventory.map(({ id, count }) => ({ item: B.getItemName(id), count })),

@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import * as B from '../src/blocks.js';
+import { RECIPES } from '../src/crafting.js';
+import { craft, PICKAXE_GOAL } from './crafting.js';
 import { createExplorerWorld, positionKey } from './world.js';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -186,6 +188,114 @@ test('Model uses a completed objective to choose a remembered site; restart and 
   } finally {
     await stop();
     await new Promise(resolve => model.close(resolve));
+    cleanup();
+  }
+});
+
+test('Crafting rejects missing ingredients or output space without consuming items', () => {
+  const recipe = RECIPES.find(entry => entry.result.id === B.STICK);
+  const short = [{ id: B.PLANKS, count: 1 }];
+  assert.match(craft(short, recipe, 2).error, /Missing/);
+  assert.deepEqual(short, [{ id: B.PLANKS, count: 1 }]);
+  const full = [{ id: B.PLANKS, count: 3 }, ...Array.from({ length: 26 }, () => ({ id: B.WOOD, count: 64 }))];
+  assert.match(craft(full, recipe, 2).error, /Inventory is full/);
+  assert.equal(full[0].count, 3);
+});
+
+test('Explorer gathers, crafts, resumes, equips, and mines a generated pickaxe-only block', async () => {
+  let requests = 0;
+  const model = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const part of req) chunks.push(part);
+    const { options } = JSON.parse(JSON.parse(Buffer.concat(chunks)).messages[1].content);
+    requests++;
+    const choice = options.findIndex(option => option.label === PICKAXE_GOAL);
+    res.end(JSON.stringify({ model: 'craft-test', choices: [{ message: { content: JSON.stringify({ choice, reason: 'Craft a first tool to unlock stone.' }) } }] }));
+  });
+  await new Promise(resolve => model.listen(0, '127.0.0.1', resolve));
+  const { start, readState, stop, statePath, cleanup } = agentFixture({
+    AGENT_LLM: 'on', LLM_URL: `http://127.0.0.1:${model.address().port}/v1/chat/completions`
+  });
+  try {
+    await start(140);
+    const intermediate = await waitFor(readState, s => s.inventory.some(item => item.id === B.PLANKS));
+    assert.equal(intermediate.objective.label, PICKAXE_GOAL);
+    assert.equal(intermediate.objective.source, 'llm');
+    assert.deepEqual(intermediate.inventory, [{ id: B.PLANKS, count: 4 }]);
+    assert.equal(requests, 1);
+    await stop();
+    const saved = JSON.parse(readFileSync(statePath, 'utf8'));
+    assert.deepEqual(await start(140), { ...saved, online: true });
+
+    const completed = await waitFor(readState, s => s.pickaxeUsed || s.objective?.status === 'failed', 60000);
+    assert.equal(completed.lastObjectiveOutcome.status, 'completed', JSON.stringify(completed.lastObjectiveOutcome));
+    assert.equal(requests, 1, 'craft and navigation require no further inference');
+    assert.equal(completed.equippedTool, B.TOOL_PICKAXE);
+    const finalCraft = completed.memory.find(e => e.produced?.id === B.TOOL_PICKAXE);
+    assert.deepEqual(finalCraft.consumed, { [B.PLANKS]: 3, [B.STICK]: 2 });
+    const tableKey = positionKey(finalCraft.table);
+    assert.equal(completed.placedBlocks[tableKey], B.CRAFTING);
+    const original = createExplorerWorld(completed.seed, {});
+    const restoredWorld = createExplorerWorld(completed.seed, completed.removedBlocks, completed.placedBlocks);
+    assert.equal(original.getBlock(finalCraft.table.x, finalCraft.table.y, finalCraft.table.z), B.AIR);
+    assert.equal(restoredWorld.getBlock(finalCraft.table.x, finalCraft.table.y, finalCraft.table.z), B.CRAFTING);
+    const edits = Object.entries(completed.removedBlocks);
+    const wood = edits.filter(([, id]) => id === B.WOOD);
+    assert.equal(wood.length, 3);
+    for (const [key] of wood) assert.equal(original.getBlock(...key.split(',').map(Number)), B.WOOD);
+    const mined = completed.memory.find(e => e.action === 'mine' && e.tool === B.TOOL_PICKAXE);
+    assert.ok(mined);
+    assert.equal(B.blockBreakTime(mined.block.id), Infinity);
+    assert.ok(Number.isFinite(B.blockBreakTime(mined.block.id, B.TOOL_PICKAXE)));
+    const { x, y, z, id } = mined.block;
+    assert.equal(original.getBlock(x, y, z), id);
+    assert.equal(restoredWorld.getBlock(x, y, z), B.AIR);
+    const expected = { [B.PLANKS]: 3, [B.STICK]: 2, [B.TOOL_PICKAXE]: 1 };
+    for (const [key, blockId] of edits) {
+      if (blockId === B.WOOD) continue;
+      assert.equal(original.getBlock(...key.split(',').map(Number)), blockId);
+      const { id: dropId, count } = B.blockDrop(blockId);
+      expected[dropId] = (expected[dropId] ?? 0) + count;
+    }
+    assert.deepEqual(Object.fromEntries(completed.inventory.map(item => [item.id, item.count])), expected);
+    await stop();
+    const final = JSON.parse(readFileSync(statePath, 'utf8'));
+    assert.deepEqual(await start(5000), { ...final, online: true });
+    console.log(`Crafted and placed table at ${tableKey}; ${mined.outcome} at ${positionKey(mined.block)}`);
+  } finally {
+    await stop();
+    await new Promise(resolve => model.close(resolve));
+    cleanup();
+  }
+});
+
+test('A saved crafting goal with unavailable wood fails honestly and yields to another objective', async () => {
+  const { start, readState, stop, statePath, cleanup } = agentFixture();
+  try {
+    const world = createExplorerWorld(4242, {});
+    const origin = world.spawn(8, 8);
+    const failedDestinations = {};
+    for (const { position } of world.survey(origin, {}).queue) {
+      failedDestinations[positionKey(position)] = true;
+      for (const block of world.resources(position)) {
+        if (block.id === B.WOOD) failedDestinations[positionKey(block)] = true;
+      }
+    }
+    writeFileSync(statePath, JSON.stringify({
+      ...origin, seed: 4242, version: 2, tick: 0, energy: 100, inventory: [],
+      memory: [], visited: {}, obstacles: {}, failedDestinations, discoveries: [],
+      objective: { kind: 'craft', label: PICKAXE_GOAL, status: 'active', progress: { completed: [], searches: 0 } }
+    }));
+    await start(125);
+    const failed = await waitFor(readState, s => s.lastObjectiveOutcome?.status === 'failed');
+    assert.match(failed.lastObjectiveOutcome.detail, /Missing wood/);
+    assert.deepEqual(failed.inventory, []);
+    assert.deepEqual(failed.removedBlocks, {});
+    assert.ok(!failed.memory.some(e => e.action === 'craft' && e.result === 'success'));
+    const next = await waitFor(readState, s => s.objective?.kind !== 'craft');
+    assert.ok(next.craftRetryAt > next.tick);
+  } finally {
+    await stop();
     cleanup();
   }
 });

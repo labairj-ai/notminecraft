@@ -108,17 +108,18 @@ export class World {
     for (const n of neighbors) if (n) this._scheduleBuild(n);
   }
 
-  applyExplorerEdits(edits) {
-    for (const key of Object.keys(edits)) {
+  applyExplorerEdits(removals, placements = {}) {
+    const edits = { ...Object.fromEntries(Object.keys(removals).map(key => [key, B.AIR])), ...placements };
+    for (const [key, id] of Object.entries(edits)) {
       const [x, y, z] = key.split(',').map(Number);
       const cx = Math.floor(x / CHUNK_SIZE);
       const cz = Math.floor(z / CHUNK_SIZE);
       const chunkKey = this.key(cx, cz);
       if (!this.explorerEdits.has(chunkKey)) this.explorerEdits.set(chunkKey, new Map());
-      const removals = this.explorerEdits.get(chunkKey);
-      if (removals.has(key)) continue;
-      removals.set(key, [x - cx * CHUNK_SIZE, y, z - cz * CHUNK_SIZE]);
-      this.setBlock(x, y, z, B.AIR, false);
+      const chunkEdits = this.explorerEdits.get(chunkKey);
+      if (chunkEdits.get(key)?.[3] === id) continue;
+      chunkEdits.set(key, [x - cx * CHUNK_SIZE, y, z - cz * CHUNK_SIZE, id]);
+      this.setBlock(x, y, z, id, false);
     }
   }
 
@@ -150,8 +151,8 @@ export class World {
       const k = this.key(cx, cz);
       const c = new Chunk(cx, cz, this);
       c.generate();
-      for (const [x, y, z] of this.explorerEdits.get(k)?.values() ?? []) {
-        c.setLocal(x, y, z, B.AIR);
+      for (const [x, y, z, id] of this.explorerEdits.get(k)?.values() ?? []) {
+        c.setLocal(x, y, z, id);
       }
       this.chunks.set(k, c);
       this._scheduleBuild(c);

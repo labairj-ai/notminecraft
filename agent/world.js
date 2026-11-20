@@ -2,17 +2,19 @@ import * as B from '../src/blocks.js';
 import { blockIndex, CHUNK_HEIGHT, CHUNK_SIZE, createChunkGenerator } from '../src/terrain.js';
 
 const DIRECTIONS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
-const GATHERABLE = [B.WOOD, B.CLAY, B.SAND, B.GRAVEL, B.SNOW_BLOCK, B.GRASS, B.DIRT];
+const GATHERABLE = [B.WOOD, B.CLAY, B.SAND, B.GRAVEL, B.SNOW_BLOCK, B.GRASS, B.DIRT, B.STONE, B.COAL_ORE, B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE];
 export const positionKey = ({ x, y, z }) => `${x},${y},${z}`;
 const blockedKey = (from, x, z) => `${positionKey(from)}>${x},${z}`;
 
-export function createExplorerWorld(seed, edits) {
+export function createExplorerWorld(seed, edits, placements = {}) {
   const generate = createChunkGenerator(seed);
   const chunks = new Map();
 
   function getBlock(x, y, z) {
     if (y < 0 || y >= CHUNK_HEIGHT) return B.AIR;
-    if (Object.hasOwn(edits, positionKey({ x, y, z }))) return B.AIR;
+    const keyAt = positionKey({ x, y, z });
+    if (Object.hasOwn(placements, keyAt)) return placements[keyAt];
+    if (Object.hasOwn(edits, keyAt)) return B.AIR;
     const cx = Math.floor(x / CHUNK_SIZE);
     const cz = Math.floor(z / CHUNK_SIZE);
     const key = `${cx},${cz}`;
@@ -84,6 +86,41 @@ export function createExplorerWorld(seed, edits) {
     return found;
   }
 
+  function tableSites({ x, y, z }) {
+    return DIRECTIONS.map(([dx, dz]) => ({ x: x + dx, y, z: z + dz }));
+  }
+
+  function nearbyTable(position) {
+    return tableSites(position).find(({ x, y, z }) => getBlock(x, y, z) === B.CRAFTING);
+  }
+
+  function tablePlacement(position) {
+    const sites = tableSites(position);
+    // Leave at least one walkable exit after placing the table.
+    const exits = sites.filter(({ x, z }) => stepTo(position, x, z));
+    return sites.find(site => getBlock(site.x, site.y, site.z) === B.AIR &&
+      B.isSolid(getBlock(site.x, site.y - 1, site.z)) &&
+      exits.some(exit => exit !== site));
+  }
+
+  function excavation(position) {
+    const soft = [B.GRASS, B.DIRT, B.SAND, B.GRAVEL, B.CLAY, B.SNOW_BLOCK];
+    const sites = [];
+    for (const [dx, dz] of DIRECTIONS) {
+      const x = position.x + dx;
+      const z = position.z + dz;
+      const y = position.y - 1;
+      const floor = getBlock(x, y - 1, z);
+      if (!B.isSolid(floor) || floor === B.FENCE || floor === B.ESCALATOR_UP) continue;
+      const covering = [y + 2, y + 1, y].map(by => ({ x, y: by, z, id: getBlock(x, by, z) }));
+      if (covering.some(block => block.id !== B.AIR && !soft.includes(block.id))) continue;
+      if ([y, y + 1, y + 2].some(by => DIRECTIONS.some(([a, b]) => B.isLiquid(getBlock(x + a, by, z + b))))) continue;
+      const blockers = covering.filter(block => block.id !== B.AIR);
+      if (blockers.length) sites.push({ position: { x, y, z }, blockers });
+    }
+    return sites.sort((a, b) => a.blockers.length - b.blockers.length)[0];
+  }
+
   function survey(start, blocked) {
     const queue = [{ position: start, route: [] }];
     const seen = new Set([positionKey(start)]);
@@ -108,5 +145,5 @@ export function createExplorerWorld(seed, edits) {
     return { queue, obstacles };
   }
 
-  return { getBlock, spawn, stepTo, resources, survey };
+  return { getBlock, spawn, stepTo, resources, survey, nearbyTable, tablePlacement, excavation };
 }
