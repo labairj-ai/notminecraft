@@ -188,6 +188,18 @@ export const BLOCK_DROPS = {
   [DIAMOND_ORE]: { id: DIAMOND,    count: 1 },
 };
 
+export function blockDrop(id) {
+  return BLOCK_DROPS[id] ?? { id, count: 1 };
+}
+
+export function blockBreakTime(id, toolId) {
+  const def = getDef(id);
+  if (!def || def.unbreakable) return Infinity;
+  const tool = TOOL_DEFS[toolId];
+  if (tool?.toolAction === def.action) return def.breakTime / (tool.speed ?? 1);
+  return def.requiresTool ? Infinity : def.breakTime * (def.handMult ?? 3);
+}
+
 // Returns the def for any item ID (block, tool, or material).
 export function getAnyDef(id) {
   return BLOCK_DEFS[id] || TOOL_DEFS[id] || ITEM_DEFS[id] || null;

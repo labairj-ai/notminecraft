@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as B from './blocks.js';
 import { getAtlasUV } from './textures.js';
-import { CHUNK_SIZE, CHUNK_HEIGHT, blockIndex, generateChunkData } from './terrain.js';
+import { CHUNK_SIZE, CHUNK_HEIGHT, blockIndex } from './terrain.js';
 
 // Face definitions: [dir, vertices[4], faceSlot]
 // Vertices follow BoxGeometry convention for correct CCW winding
@@ -32,8 +32,8 @@ export class Chunk {
     this.dirty = true;
   }
 
-  generate(noise2D, noise3D) {
-    this.data = generateChunkData(this.cx, this.cz, noise2D, noise3D, this.world.seed);
+  generate() {
+    this.data = this.world.generateChunk(this.cx, this.cz);
     this.dirty = true;
   }
 

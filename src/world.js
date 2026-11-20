@@ -1,8 +1,7 @@
 import * as THREE from 'three';
-import { createNoise2D, createNoise3D } from 'simplex-noise';
 import { Chunk } from './chunk.js';
 import { createAtlas } from './textures.js';
-import { CHUNK_SIZE, CHUNK_HEIGHT, SEA_LEVEL } from './terrain.js';
+import { CHUNK_SIZE, CHUNK_HEIGHT, createChunkGenerator } from './terrain.js';
 import { getCityInfo, getChunkNPCSpawns, getChunkCarSpawns, getChunkShopkeeperSpawns, getChunkBusStopSpawns, getChunkStreetlightSpawns, getNearestCityCenter, CITY_BASE_Y } from './city.js';
 import { NPCManager } from './npc.js';
 import { CarManager, BusStopManager } from './car.js';
@@ -23,10 +22,8 @@ export class World {
     this.seed   = seed;
     this._grassQueue = new Map(); // `x,y,z` → regrow timestamp
 
-    const alea = (s) => { let n = s; return () => { n = (n * 1664525 + 1013904223) >>> 0; return n / 0x100000000; }; };
-    const rng = alea(seed);
-    this.noise2D = createNoise2D(rng);
-    this.noise3D = createNoise3D(alea(seed + 1));
+    this.generateChunk = createChunkGenerator(seed);
+    this.explorerEdits = new Map();
 
     // Texture atlas
     const atlasCanvas = createAtlas();
@@ -76,7 +73,7 @@ export class World {
     return chunk.getLocal(lx, wy, lz);
   }
 
-  setBlock(wx, wy, wz, id) {
+  setBlock(wx, wy, wz, id, regrow = true) {
     if (wy < 0 || wy >= CHUNK_HEIGHT) return;
     const cx = Math.floor(wx / CHUNK_SIZE);
     const cz = Math.floor(wz / CHUNK_SIZE);
@@ -87,7 +84,7 @@ export class World {
     chunk.setLocal(lx, wy, lz, id);
 
     // Grass regrowth: when a block becomes AIR, queue the dirt below for regrowth
-    if (id === B.AIR) {
+    if (id === B.AIR && regrow) {
       const below = this.getBlock(wx, wy - 1, wz);
       if (below === B.DIRT) {
         this._grassQueue.set(`${wx},${wy - 1},${wz}`, Date.now() + GRASS_REGROW_MS);
@@ -109,6 +106,20 @@ export class World {
 
     this._scheduleBuild(chunk);
     for (const n of neighbors) if (n) this._scheduleBuild(n);
+  }
+
+  applyExplorerEdits(edits) {
+    for (const key of Object.keys(edits)) {
+      const [x, y, z] = key.split(',').map(Number);
+      const cx = Math.floor(x / CHUNK_SIZE);
+      const cz = Math.floor(z / CHUNK_SIZE);
+      const chunkKey = this.key(cx, cz);
+      if (!this.explorerEdits.has(chunkKey)) this.explorerEdits.set(chunkKey, new Map());
+      const removals = this.explorerEdits.get(chunkKey);
+      if (removals.has(key)) continue;
+      removals.set(key, [x - cx * CHUNK_SIZE, y, z - cz * CHUNK_SIZE]);
+      this.setBlock(x, y, z, B.AIR, false);
+    }
   }
 
   isSolid(wx, wy, wz) { return B.isSolid(this.getBlock(wx, wy, wz)); }
@@ -138,7 +149,10 @@ export class World {
     for (const [, cx, cz] of missing.slice(0, GEN_BUDGET)) {
       const k = this.key(cx, cz);
       const c = new Chunk(cx, cz, this);
-      c.generate(this.noise2D, this.noise3D);
+      c.generate();
+      for (const [x, y, z] of this.explorerEdits.get(k)?.values() ?? []) {
+        c.setLocal(x, y, z, B.AIR);
+      }
       this.chunks.set(k, c);
       this._scheduleBuild(c);
       // Rebuild already-meshed neighbours so their border faces account for

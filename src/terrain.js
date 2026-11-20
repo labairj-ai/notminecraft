@@ -1,3 +1,4 @@
+import { createNoise2D, createNoise3D } from 'simplex-noise';
 import * as B from './blocks.js';
 import { getCityInfo, getCityColumn, CITY_BASE_Y, DOOR_HEIGHT, BUILDING_MAX } from './city.js';
 
@@ -132,6 +133,19 @@ export function blockIndex(x, y, z) {
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 function smoothstep(t) { return t * t * (3 - 2 * t); }
+
+export function createChunkGenerator(seed) {
+  const random = initial => {
+    let n = initial;
+    return () => {
+      n = (n * 1664525 + 1013904223) >>> 0;
+      return n / 0x100000000;
+    };
+  };
+  const noise2D = createNoise2D(random(seed));
+  const noise3D = createNoise3D(random(seed + 1));
+  return (cx, cz) => generateChunkData(cx, cz, noise2D, noise3D, seed);
+}
 
 export function generateChunkData(chunkX, chunkZ, noise2D, noise3D, worldSeed = 0) {
   const data = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT);

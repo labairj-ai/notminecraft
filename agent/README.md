@@ -1,8 +1,10 @@
-# Persistent Explorer (first implementation)
+# Persistent Explorer
 
-This is the first continuously running autonomous character for NotMinecraft. It is intentionally small: **one simulated character**, three allowed actions (explore, inspect, rest), saved experiences and preferences, and optional local-model decision making. It does **not** yet simulate mining, crafting, collision-aware navigation, NPC encounters, combat, or a fully persistent voxel world. Its exploratory position is a lightweight headless simulation; the existing Three.js game displays it.
+Explorer uses NotMinecraft's seeded voxel generator to explore nearby terrain, navigate one cell at a time, inspect exposed resources, collect blocks, and rest. It checks for solid footing, headroom, liquids, and safe one-block changes in elevation. It starts with empty inventory and can gather exposed wood, clay, sand, gravel, snow, grass, and dirt using the game's break times, drops, and stack limits.
 
-## Start on the Mac Studio
+Explorer records discoveries, collections, obstacles, failed destinations, and revisits. Route searches skip remembered obstacles, reconsider edges near mined blocks, and prefer less-visited destinations when exploring.
+
+## Run and observe
 
 Requires Node.js 20 or newer. From the checkout:
 
@@ -10,50 +12,30 @@ Requires Node.js 20 or newer. From the checkout:
 npm install
 npm run check:agent
 npm run test:agent
-npm run agent
+npm run build
+sh agent/install-macos.sh
+curl http://127.0.0.1:8787/state
+npm run dev -- --port 5177 --strictPort
 ```
 
-The agent is available at http://127.0.0.1:8787/state. It saves automatically to `data/explorer.json`, preserving location, visited coordinates, actions and experiences across restarts. State writes are atomic. The service listens only on loopback.
+Open [NotMinecraft with Explorer](http://localhost:5177/notminecraft/?explorer). The panel shows activity, its destination, inventory, discoveries, recent outcomes and memories, and the last successful model decision. **Visit Explorer** takes you to the character.
 
-## Observe the character in NotMinecraft
-
-In a second terminal:
-
-```sh
-npm run dev
-```
-
-Open **http://localhost:5177/notminecraft/?explorer** (or the URL printed by Vite, adding `?explorer`). The Explorer panel shows its latest action, energy and recent outcome. Click **Visit Explorer** to teleport nearby. When `?explorer` is absent, the existing game is unchanged.
-
-The viewer requires the local service. It intentionally does not use the public GitHub Pages site to reach the agent, nor expose the API to the internet. The character exists independently of the browser. It currently shares only the fixed world seed and position with the game; the full voxel environment is not simulated in the background.
+The service runs with the browser closed. Each tick atomically saves position, inventory, memories, and block removals to `data/explorer.json`. The Explorer view applies those removals to both loaded and newly generated chunks. Browser player edits are local to their game session and aren't sent back to the agent. Explorer does not craft, fight, swim, or climb ladders.
 
 ## Local LLM
 
-By default, the agent attempts an OpenAI-compatible local endpoint every **20 ticks** (roughly 10 minutes) and uses simple deterministic rules between model decisions. If inference fails it continues operating, so the character does not freeze during an outage. Override with:
+The agent consults the local model only when there are multiple viable goals, at most once every ten minutes. Navigation, block changes, and inventory use deterministic game rules. If the model is unavailable or returns an invalid choice, Explorer selects a goal deterministically.
 
 ```sh
 LLM_URL=http://127.0.0.1:8080/v1/chat/completions LLM_MODEL=local npm run agent
 ```
 
-Set `AGENT_LLM=off` to run without an LLM. The endpoint must be compatible with the OpenAI chat-completions API; adjust the URL/model for your MLX server.
+Set `AGENT_LLM=off` to disable model requests. The server uses an OpenAI-compatible chat-completions endpoint and listens only on loopback.
 
-## Keep running without a terminal
+## macOS service
 
-On macOS, with Node installed and this checkout at its permanent location:
-
-```sh
-sh agent/install-macos.sh
-```
-
-This installs a user LaunchAgent that launches at login and restarts on failure. Verify with `curl http://127.0.0.1:8787/state`. Logs are in `~/Library/Logs/notminecraft-explorer*.log`. Stop or remove it with:
+The LaunchAgent starts when the user logs in and restarts on failure. The Mac must remain powered on and awake for continuous operation. Logs are in `~/Library/Logs/notminecraft-explorer*.log`. To stop the service, run:
 
 ```sh
 launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/ai.labairj.notminecraft.explorer.plist"
-rm "$HOME/Library/LaunchAgents/ai.labairj.notminecraft.explorer.plist"
 ```
-
-For genuine 24/7 operation the Mac must remain powered and awake, with a user session available. The launch agent runs at login, not before a user logs in. If you later want a boot-time service, a system daemon is a separate change.
-
-## Next step
-
-Make the headless simulator consult shared terrain/collision and block data so moves and interactions have genuine game-world consequences. Only then add autonomous resource gathering and crafting. That is preferable to falsely representing abstract position updates as completed in-game actions.

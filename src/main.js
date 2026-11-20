@@ -117,7 +117,10 @@ const player  = new Player(camera, world);
 const ui      = new UI(player, world);
 const hand    = new FirstPersonHand(renderer);
 const minimap = new Minimap(document.getElementById('minimap'), world);
-const explorerView = createExplorerView(scene, world, player);
+const explorerView = createExplorerView(scene, world, player, () => {
+  if (gameState === 'menu') startGame();
+  else if (gameState === 'paused') document.getElementById('resume-btn').click();
+});
 
 let mobileControls = null;
 if (IS_MOBILE) {

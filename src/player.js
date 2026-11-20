@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import * as B from './blocks.js';
-import { getToolAction, BLOCK_DROPS } from './blocks.js';
+import { getToolAction } from './blocks.js';
 import { VEHICLE_TYPES } from './car.js';
 
 const GRAVITY    = 28;
@@ -298,28 +298,19 @@ export class Player {
     const def = B.getDef(id);
     if (!def || def.unbreakable) { this.breakTarget = null; this.breakProgress = 0; return; }
 
-    const toolAction  = getToolAction(this.hotbar[this.selectedSlot]?.id);
-    const correctTool = toolAction === def.action;
-    this.breakable    = !def.requiresTool || correctTool;
-
+    this.effectiveBreakTime = B.blockBreakTime(id, this.hotbar[this.selectedSlot]?.id);
+    this.breakable = Number.isFinite(this.effectiveBreakTime);
     if (!this.breakable) {
-      this.breakProgress      = 0;
-      this.effectiveBreakTime = Infinity;
+      this.breakProgress = 0;
       return;
     }
-
-    const toolDef  = B.TOOL_DEFS[this.hotbar[this.selectedSlot]?.id];
-    const speed    = correctTool ? (toolDef?.speed ?? 1.0) : 1.0;
-    const mult     = correctTool ? 1.0 : (def.handMult ?? 3.0);
-    this.effectiveBreakTime = (def.breakTime * mult) / speed;
     this.breakProgress += dt;
 
     if (this.breakProgress >= this.effectiveBreakTime) {
       if (id !== B.AIR && !B.getDef(id)?.unbreakable) {
         this.world.setBlock(wx, wy, wz, B.AIR);
-        const drop = BLOCK_DROPS[id];
-        if (drop) this.addItem(drop.id, drop.count);
-        else      this.addItem(id, 1);
+        const drop = B.blockDrop(id);
+        this.addItem(drop.id, drop.count);
       }
       this.breakTarget = null; this.breakProgress = 0;
     }

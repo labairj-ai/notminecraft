@@ -1,7 +1,8 @@
 import * as THREE from 'three';
+import * as B from './blocks.js';
 
 // Browser-only viewer. The agent keeps living in agent/server.js when this page is closed.
-export function createExplorerView(scene, world, player) {
+export function createExplorerView(scene, world, player, resumeGame) {
   const params = new URLSearchParams(location.search);
   if (!params.has('explorer')) return { update() {} };
 
@@ -9,7 +10,7 @@ export function createExplorerView(scene, world, player) {
   const torso = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.85, 0.4), new THREE.MeshLambertMaterial({ color: 0x16a085 }));
   torso.position.y = 1.15;
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), new THREE.MeshLambertMaterial({ color: 0xffdc9c }));
-  head.position.y = 1.85;
+  head.position.y = 1.72;
   const legMat = new THREE.MeshLambertMaterial({ color: 0x263b52 });
   for (const x of [-0.2, 0.2]) {
     const leg = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.75, 0.3), legMat);
@@ -17,13 +18,14 @@ export function createExplorerView(scene, world, player) {
     group.add(leg);
   }
   group.add(torso, head);
+  group.name = 'Explorer';
   group.visible = false;
   scene.add(group);
 
   const panel = document.createElement('div');
-  panel.style.cssText = 'position:fixed;top:12px;left:12px;z-index:30;background:rgba(18,28,40,.9);color:white;padding:12px;border-radius:8px;font:13px sans-serif;max-width:260px;pointer-events:auto';
+  panel.id = 'explorer-panel';
   const info = document.createElement('div');
-  info.textContent = 'Explorer: connecting to local agent...';
+  info.textContent = 'Connecting to Explorer…';
   const visit = document.createElement('button');
   visit.textContent = 'Visit Explorer';
   visit.style.cssText = 'margin-top:8px;padding:6px;cursor:pointer';
@@ -31,8 +33,10 @@ export function createExplorerView(scene, world, player) {
   panel.append(info, visit);
   document.body.append(panel);
   let snapshot = null;
+  let previous = null;
+  let movedAt = 0;
   let inFlight = false;
-  let lastFetch = 0;
+  let lastFetch = -Infinity;
 
   async function fetchState() {
     if (inFlight) return;
@@ -44,14 +48,38 @@ export function createExplorerView(scene, world, player) {
       if (!response.ok) throw new Error('Agent not available');
       const next = await response.json();
       if (next.seed !== world.seed) throw new Error('World seed mismatch');
+      if (next.version !== 2) throw new Error('Update the local Explorer service');
+      world.applyExplorerEdits(next.removedBlocks);
+      if (!snapshot || snapshot.x !== next.x || snapshot.y !== next.y || snapshot.z !== next.z) {
+        previous = snapshot;
+        movedAt = performance.now();
+      }
       snapshot = next;
       visit.disabled = false;
-      const memory = next.memory?.at(-1)?.outcome || 'Starting';
-      info.textContent = `${next.name} | ${next.action} | Energy ${next.energy} | ${memory} | ${next.updatedAt}`;
-    } catch {
+      const destination = next.destination?.position;
+      const resource = next.destination?.resource;
+      const coords = ({ x, y, z }) => `(${x}, ${y}, ${z})`;
+      const inventory = new Map();
+      for (const { id, count } of next.inventory) inventory.set(id, (inventory.get(id) ?? 0) + count);
+      const items = [...inventory].map(([id, count]) => `${B.getItemName(id)} ×${count}`);
+      const discoveries = next.discoveries.slice(-3).map(block => `${B.getItemName(block.id)} ${coords(block)}`);
+      const successful = next.memory.findLast(entry => entry.result === 'success');
+      const failed = next.memory.findLast(entry => entry.result === 'failed');
+      info.textContent = [
+        `Explorer · ${next.action} · Energy ${next.energy}`,
+        `Position ${coords(next)}`,
+        destination && `Destination ${coords(destination)}${resource ? ` · ${B.getItemName(resource.id)}` : ''}`,
+        `Inventory · ${items.join(', ') || 'Empty'}`,
+        `Discoveries · ${discoveries.join(', ') || 'None yet'}`,
+        successful && `Latest success · ${successful.outcome}`,
+        failed && `Latest failure · ${failed.outcome}`,
+        `Recent memories · ${next.memory.slice(-3).map(entry => entry.outcome).join(' / ') || 'None yet'}`,
+        `Last AI decision · ${next.lastAIDecision ? `${next.lastAIDecision.goal} ${coords(next.lastAIDecision.position)}` : 'None yet'}`
+      ].filter(Boolean).join('\n');
+    } catch (err) {
       snapshot = null;
       group.visible = false;
-      info.textContent = 'Explorer offline. Run npm run agent locally, then reload.';
+      info.textContent = 'Explorer unavailable · ' + err.message;
       visit.disabled = true;
     } finally {
       clearTimeout(timeout);
@@ -59,28 +87,52 @@ export function createExplorerView(scene, world, player) {
     }
   }
 
-  function groundHeight(x, z) {
-    for (let y = 100; y >= 1; y--) {
-      if (world.getBlock(Math.floor(x), y, Math.floor(z)) !== 0) return y + 1;
-    }
-    return 40;
-  }
   visit.addEventListener('click', () => {
     if (!snapshot) return;
-    world.update(snapshot.x, snapshot.z);
-    player.pos.set(snapshot.x + 3, groundHeight(snapshot.x + 3, snapshot.z), snapshot.z + 3);
-    player.vel.set(0, 0, 0);
+    resumeGame();
+    const { x, y, z } = snapshot;
+    world.update(x, z);
+    for (const [dx, dz] of [[2, 0], [0, 2], [-2, 0], [0, -2], [0, 0]]) {
+      const px = x + dx;
+      const pz = z + dz;
+      for (const py of [y, y + 1, y - 1]) {
+        if (!world.isSolid(px, py - 1, pz)) continue;
+        if (world.getBlock(px, py, pz) !== B.AIR || world.getBlock(px, py + 1, pz) !== B.AIR) continue;
+        player.pos.set(px + 0.5, py, pz + 0.5);
+        player.vel.set(0, 0, 0);
+        if (dx || dz) player.yaw = Math.atan2(dx, dz);
+        player.pitch = -0.12;
+        if (!player.spawned) {
+          player.spawned = true;
+          player.spawnPos = player.pos.clone();
+        }
+        return;
+      }
+    }
   });
   return {
     update(now) {
-      if (now - lastFetch >= 3000) {
+      if (now - lastFetch >= 1000) {
         lastFetch = now;
         fetchState();
       }
       if (!snapshot) return;
       const dx = player.pos.x - snapshot.x, dz = player.pos.z - snapshot.z;
       group.visible = Math.hypot(dx, dz) < 110;
-      group.position.set(snapshot.x, groundHeight(snapshot.x, snapshot.z), snapshot.z);
+      const adjacent = previous && Math.abs(previous.x - snapshot.x) + Math.abs(previous.z - snapshot.z) === 1;
+      if (!adjacent) {
+        group.position.set(snapshot.x + 0.5, snapshot.y, snapshot.z + 0.5);
+        return;
+      }
+      const t = Math.max(0, Math.min(1, (now - movedAt) / 280));
+      const stepped = snapshot.y !== previous.y;
+      const horizontal = !stepped ? t : snapshot.y > previous.y ? Math.max(0, 2 * t - 1) : Math.min(1, 2 * t);
+      const vertical = snapshot.y > previous.y ? Math.min(1, 2 * t) : Math.max(0, 2 * t - 1);
+      group.position.set(
+        previous.x + 0.5 + (snapshot.x - previous.x) * horizontal,
+        previous.y + (snapshot.y - previous.y) * vertical,
+        previous.z + 0.5 + (snapshot.z - previous.z) * horizontal
+      );
     }
   };
 }
