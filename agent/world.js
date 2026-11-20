@@ -121,12 +121,12 @@ export function createExplorerWorld(seed, edits, placements = {}) {
     return sites.sort((a, b) => a.blockers.length - b.blockers.length)[0];
   }
 
-  function survey(start, blocked) {
+  function survey(start, blocked, radius = 8) {
     const queue = [{ position: start, route: [] }];
     const seen = new Set([positionKey(start)]);
     const obstacles = [];
     for (const { position, route } of queue) {
-      if (route.length >= 8) continue;
+      if (route.length >= radius) continue;
       for (const [dx, dz] of DIRECTIONS) {
         const x = position.x + dx;
         const z = position.z + dz;

@@ -3,10 +3,14 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as B from '../src/blocks.js';
+import { CHUNK_HEIGHT } from '../src/terrain.js';
 import { createExplorerWorld, positionKey } from './world.js';
 import { objectiveOptions, selectObjective } from './objectives.js';
-import { availableSlot, countItem, craft, PICKAXE_GOAL, pickaxeStep, takeItems } from './crafting.js';
+import { availableSlot, countItem, craft, PICKAXE_GOAL, pickaxeStep, supplyStep, takeItems } from './crafting.js';
 
+import { findShelter, SHELTER_GOAL, shelterPlan, validShelter } from './shelter.js';
+
+const SHELTER_BLOCKS = shelterPlan({ x: 0, y: 0, z: 0 }, [0, -1]).blocks.length;
 const PORT = Number(process.env.AGENT_PORT || 8787);
 const STORE = process.env.AGENT_DATA || path.resolve('data/explorer.json');
 const INTERVAL = Math.max(50, Number(process.env.AGENT_INTERVAL_MS || 5000));
@@ -65,15 +69,16 @@ function sameBlock(a, b) {
   return a.id === b.id && positionKey(a) === positionKey(b);
 }
 
-function finishObjective(next, status, outcome) {
+function finishObjective(next, status, outcome, details = {}) {
   const objective = next.objective;
   if (objective) {
     objective.status = status;
+    if (objective.kind === 'shelter' && status === 'failed') next.shelterRetryAt = next.tick + 40;
     if (objective.kind === 'craft') {
       if (status === 'failed') next.craftRetryAt = next.tick + 40;
       else next.pickaxeUsed = true;
     }
-    const finished = { label: objective.label, status, detail: outcome };
+    const finished = { label: objective.label, status, detail: outcome, ...details };
     next.lastObjectiveOutcome = finished;
     remember(next, 'objective', status, `${objective.label} · ${outcome}`, { objectiveOutcome: finished });
   }
@@ -108,7 +113,7 @@ function survey(next) {
     route.length > 0 && !next.failedDestinations[positionKey(position)]
   ).sort((a, b) => (next.visited[positionKey(a.position)] ?? 0) -
     (next.visited[positionKey(b.position)] ?? 0) || b.route.length - a.route.length);
-  return { resources: [...resources.values()], frontier: frontiers[0] };
+  return { resources: [...resources.values()], frontier: frontiers[0], queue };
 }
 
 async function plan(next) {
@@ -136,13 +141,27 @@ async function plan(next) {
         : `This goal gathers any missing logs itself, then crafts and equips the pickaxe to mine stone or ore. ${needed} additional logs needed.` });
     }
   }
+  const wood = collectable.filter(({ resource }) => resource.id === B.WOOD).length;
+  if (next.energy >= 25 && !next.shelters?.length && next.tick >= (next.shelterRetryAt ?? 0)) {
+    const stock = supplyStep(next.inventory, B.PLANKS, SHELTER_BLOCKS);
+    const logs = stock.missing[0]?.count ?? 0;
+    const site = logs <= wood + 1 && findShelter(world, world.survey(next, next.obstacles, 24).queue, next.unsuitableSites ?? {}).plan;
+    if (site && logs <= wood + 1 && (wood || !logs)) {
+      options.push({ kind: 'shelter', label: SHELTER_GOAL,
+        reason: `There is no completed shelter. A dry, level footprint and entrance are reachable. ${SHELTER_BLOCKS} planks required; ${logs} additional logs needed, ${wood} reachable.` });
+    }
+  }
+  if (next.energy >= 25 && countItem(next.inventory, B.WOOD) && countItem(next.inventory, B.PLANKS) < 4) {
+    options.push({ kind: 'supplies', label: 'Craft planks for supplies', reason: 'Turn stocked logs into useful building or crafting materials.' });
+  }
   if (options.length === 1 && options[0].kind === 'rest' &&
       next.energy >= 75 && next.lastObjectiveOutcome?.label === options[0].label) return;
   const { choice, source, reason, sourceNote, memories, model } = await selectObjective(next, options);
   const at = new Date().toISOString();
   next.objective = {
     at, kind: choice.kind, label: choice.label, status: 'active', source, sourceNote, reason,
-    fact: choice.reason, memories, site: choice.site, model
+    fact: choice.reason, memories, site: choice.site, model,
+    alternatives: options.filter(option => option !== choice).map(option => option.label)
   };
   remember(next, 'decision', 'selected', choice.label, { source, reason, sourceNote });
   if (source === 'llm') {
@@ -154,7 +173,7 @@ async function plan(next) {
   }
 
   next.action = 'explore';
-  if (choice.kind === 'craft') {
+  if (['craft', 'shelter', 'supplies'].includes(choice.kind)) {
     next.objective.progress = { step: 'Check ingredients', completed: [], missing: [], searches: 0 };
     return;
   }
@@ -175,10 +194,21 @@ function progress(next, description) {
   next.objective.progress.completed.push(description);
 }
 
-function advanceCraft(next) {
+function placeBlock(next, site, id) {
+  const { x, y, z } = site;
+  const self = x === next.x && z === next.z && (y === next.y || y === next.y + 1);
+  const distance = Math.abs(x - next.x) + Math.abs(y - next.y - 1) + Math.abs(z - next.z);
+  if (y < 0 || y >= CHUNK_HEIGHT || self || distance > 4 || world.getBlock(x, y, z) !== B.AIR) return false;
+  const faces = [[1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]];
+  if (!faces.some(([a,b,c]) => B.isSolid(world.getBlock(x+a, y+b, z+c)))) return false;
+  if (!takeItems(next.inventory, id, 1)) return false;
+  next.inventory = next.inventory.filter(slot => slot.count);
+  next.placedBlocks[positionKey(site)] = id;
+  return true;
+}
+
+function performRecipeStep(next, step, table) {
   const progressState = next.objective.progress;
-  const table = world.nearbyTable(next);
-  const step = pickaxeStep(next.inventory, table);
   progressState.missing = step.missing;
   if (step.kind === 'craft') {
     next.action = 'craft';
@@ -187,29 +217,35 @@ function advanceCraft(next) {
     const result = craft(next.inventory, step.recipe, table ? 3 : 2);
     if (result.error) {
       finishObjective(next, 'failed', result.error);
-      return;
+      return true;
     }
     next.inventory = result.inventory;
     progress(next, `Crafted ${name} ×${result.produced.count}`);
     remember(next, 'craft', 'success', `Crafted ${name} ×${result.produced.count}`, {
       consumed: result.consumed, produced: result.produced, table: step.recipe.size === 3 ? table : undefined
     });
-    return;
+    return true;
   }
   if (step.kind === 'place') {
     next.action = 'place';
     progressState.step = 'Place a crafting table';
     const site = world.tablePlacement(next);
-    if (!site || !takeItems(next.inventory, B.CRAFTING, 1)) {
+    if (!site || !placeBlock(next, site, B.CRAFTING)) {
       finishObjective(next, 'failed', 'No reachable, supported space for a crafting table');
-      return;
+      return true;
     }
-    next.inventory = next.inventory.filter(slot => slot.count);
-    next.placedBlocks[positionKey(site)] = B.CRAFTING;
     progress(next, 'Placed a crafting table');
     remember(next, 'place', 'success', 'Placed a crafting table', { block: { ...site, id: B.CRAFTING } });
-    return;
+    return true;
   }
+  return false;
+}
+
+function advanceCraft(next) {
+  const progressState = next.objective.progress;
+  const table = world.nearbyTable(next);
+  const step = pickaxeStep(next.inventory, table);
+  if (performRecipeStep(next, step, table)) return;
   if (step.kind === 'equip' && next.equippedTool !== B.TOOL_PICKAXE) {
     next.action = 'equip';
     next.equippedTool = B.TOOL_PICKAXE;
@@ -274,6 +310,86 @@ function advanceCraft(next) {
     : gathering ? 'Missing wood: no reachable logs after searching' : 'No reachable pickaxe-only resource after searching');
 }
 
+function advanceBuilding(next) {
+  const objective = next.objective;
+  const work = objective.progress;
+  const shelter = objective.kind === 'shelter';
+  const required = shelter ? SHELTER_BLOCKS - (work.placed ?? 0) : 4;
+  const step = supplyStep(next.inventory, B.PLANKS, required);
+  if (shelter) work.materials = { required: SHELTER_BLOCKS, available: countItem(next.inventory, B.PLANKS) };
+  if (performRecipeStep(next, step)) return;
+  if (step.kind === 'gather') {
+    work.step = 'Gather wood for planks';
+    next.action = 'explore';
+    const { resources, frontier } = survey(next);
+    const wood = resources.find(({ resource }) => resource.id === step.item);
+    if (wood && availableSlot(next.inventory, B.blockDrop(wood.resource.id)) >= 0) {
+      work.searches = 0;
+      setDestination(next, wood);
+    } else if (!wood && frontier && !next.visited[positionKey(frontier.position)] && work.searches < 3) {
+      work.searches++;
+      setDestination(next, frontier);
+    } else {
+      finishObjective(next, 'failed', wood ? 'Inventory is full' : 'Missing wood: no reachable logs after searching');
+    }
+    return;
+  }
+  if (!shelter) {
+    finishObjective(next, 'completed', 'Crafted a stock of planks');
+    return;
+  }
+  if (!work.plan) {
+    work.step = 'Find a supported, unobstructed site';
+    const { frontier } = survey(next);
+    const { queue } = world.survey(next, next.obstacles, 24);
+    const rejected = next.unsuitableSites ??= {};
+    const { entry, plan, unsuitable } = findShelter(world, queue, rejected);
+    for (const key of unsuitable.slice(0, 12)) rejected[key] = true;
+    next.unsuitableSites = Object.fromEntries(Object.entries(rejected).slice(-80));
+    if (unsuitable.length) remember(next, 'inspect', 'failed', `Rejected ${unsuitable.length} uneven or obstructed shelter sites`, { site: unsuitable[0] });
+    if (!plan) {
+      if (frontier && !next.visited[positionKey(frontier.position)] && work.searches < 3) {
+        work.searches++;
+        setDestination(next, frontier);
+      } else finishObjective(next, 'failed', 'No reachable, supported shelter site');
+      return;
+    }
+    work.plan = plan;
+    work.placed = 0;
+    work.step = 'Navigate to the building site';
+    remember(next, 'inspect', 'success', 'Found a dry, level shelter site', { destination: plan.center });
+    if (entry.route.length) setDestination(next, entry);
+    return;
+  }
+  const { plan, placed } = work;
+  if (!validShelter(world, plan, placed)) {
+    (next.unsuitableSites ??= {})[positionKey(plan.center)] = true;
+    if (!placed && (work.siteRetries ?? 0) < 2) {
+      work.siteRetries = (work.siteRetries ?? 0) + 1;
+      delete work.plan;
+      remember(next, 'inspect', 'failed', 'Shelter site became obstructed; finding another', { destination: plan.center });
+    } else finishObjective(next, 'failed', 'Shelter site became obstructed');
+    return;
+  }
+  if (placed === plan.blocks.length) {
+    next.action = 'inspect';
+    work.step = 'Verified foundation, walls, entrance and roof';
+    (next.shelters ??= []).push({ position: plan.center, entrance: plan.entrance, blocks: placed });
+    progress(next, 'Verified the completed shelter');
+    finishObjective(next, 'completed', `Verified shelter with ${placed} placed planks`, { position: plan.center });
+    return;
+  }
+  const block = plan.blocks[placed];
+  next.action = 'place';
+  work.step = 'Place shelter walls and roof';
+  if (!placeBlock(next, block, B.PLANKS)) {
+    finishObjective(next, 'failed', 'Shelter block lacks support, reach, or material');
+    return;
+  }
+  work.placed++;
+  work.materials.available--;
+}
+
 function fail(next, outcome) {
   const { position, resource } = next.destination;
   next.failedDestinations[positionKey(resource ?? position)] = true;
@@ -299,7 +415,7 @@ function advance(next) {
     if (visits) remember(next, 'navigate', 'success', 'Revisited familiar terrain');
     if (!route.length && !resource) {
       remember(next, 'navigate', 'success', 'Reached exploration destination', { destination: position });
-      if (next.objective?.kind === 'craft') next.destination = null;
+      if (next.objective?.progress) next.destination = null;
       else finishObjective(next, 'completed', 'Reached destination');
     }
     return;
@@ -347,6 +463,11 @@ function advance(next) {
       return;
     }
   }
+  if (next.objective?.kind === 'shelter' || next.objective?.kind === 'supplies') {
+    progress(next, outcome);
+    next.destination = null;
+    return;
+  }
   finishObjective(next, 'completed', outcome);
 }
 
@@ -386,6 +507,8 @@ async function tick() {
       advance(next);
     } else if (next.objective?.kind === 'craft' && next.objective.status === 'active') {
       advanceCraft(next);
+    } else if (['shelter', 'supplies'].includes(next.objective?.kind) && next.objective.status === 'active') {
+      advanceBuilding(next);
     } else {
       await plan(next);
     }

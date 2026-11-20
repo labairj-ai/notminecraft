@@ -24,13 +24,17 @@ The service runs with the browser closed. Each tick atomically saves the active 
 
 ## Crafting a first tool
 
-Explorer can choose the wooden pickaxe recipe as a multi-step objective. Starting with an empty inventory and no nearby table, it gathers three logs, turns them into twelve planks, spends two planks for four sticks and four planks for a crafting table, then places the table on a supported block. At the table it spends three planks and two sticks on the pickaxe. The game uses the same pickaxe item for the wooden and stone recipes and labels it **Stone Pickaxe**. The goal finishes when Explorer equips it and mines a block that requires a pickaxe.
+Explorer can choose the wooden pickaxe recipe as a multi-step objective. Starting with an empty inventory and no nearby table, it gathers three logs, turns them into twelve planks, spends two planks for four sticks and four planks for a crafting table, then places the table on a supported block. At the table it spends three planks and two sticks on the pickaxe. The game uses the same pickaxe item for the wooden and stone recipes and labels it **Pickaxe**. Existing inventory IDs and tool effectiveness are unchanged. The goal finishes when Explorer equips it and mines a block that requires a pickaxe.
 
 The objective, progress, equipped tool, table, and mined blocks persist across restarts. Explorer derives its next step from the current inventory, with bounded searches for missing resources. It records failed objectives when materials, a supported table position, inventory space, or a tool-compatible block are unavailable.
 
+## Building a shelter
+
+Explorer can choose a shelter when its survey finds a dry, level foundation and enough nearby or stocked wood. Its construction plan uses 23 planks for two-block-high walls, an open entrance, and a roof over a natural foundation. Stocked planks count toward the requirement. The same recipe dependency code supplies planks for construction, basic supplies, and the pickaxe. Explorer places one supported block per tick, then checks the foundation, entrance, walls, and roof before recording the shelter. The site, progress, and placed blocks survive restarts. Remembered unsuitable sites are skipped in later surveys.
+
 ## Local LLM
 
-Explorer defaults to the existing Ollama service at `127.0.0.1:11434`, with `qwen2.5:7b` as its model. It asks the model to choose among feasible objectives when a new objective is needed and multiple options are available. Those options include exploration, gathering, revisiting an accessible remembered resource site, and resting when energy is low. The prompt includes inventory, energy, route lengths, and recent experiences and objective outcomes. A selected objective persists until it finishes or fails. Navigation, mining, inventory, and emergency rest use deterministic game rules.
+Explorer defaults to the existing Ollama service at `127.0.0.1:11434`, with `qwen2.5:7b` as its model. It asks the model to choose among feasible objectives when a new objective is needed and multiple options are available. Those options include exploration, gathering, revisiting an accessible remembered resource site, crafting basic supplies or equipment, building a shelter, and resting when energy is low. The prompt includes inventory, energy, route lengths, and recent experiences and objective outcomes. A selected objective persists until it finishes or fails. Navigation, mining, inventory, and emergency rest use deterministic game rules.
 
 If a request fails or returns an invalid choice, Explorer selects a deterministic objective and waits at least a minute before retrying at an objective boundary. Decision records identify the source. The displayed model reason is the model's explanation, and the displayed context comes from actual saved memories.
 

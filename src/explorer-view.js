@@ -69,6 +69,7 @@ export function createExplorerView(scene, world, player, resumeGame) {
       const context = objective?.memories ?? [];
       const recent = [context.findLast(entry => entry.objectiveOutcome), ...context.slice(-2)]
         .filter((entry, index, entries) => entry && entries.indexOf(entry) === index);
+      const setback = next.memory.findLast(entry => entry.result === 'failed');
       const lastAI = next.lastAIDecision;
       const progress = objective?.progress;
       const toolOutcome = next.memory.findLast(entry => entry.tool && entry.action === 'mine');
@@ -80,6 +81,9 @@ export function createExplorerView(scene, world, player, resumeGame) {
         progress && `Step · ${progress.step}`,
         progress?.completed.length > 0 && `Completed · ${progress.completed.join(' / ')}`,
         progress && `Missing · ${progress.missing.map(({ id, count }) => `${B.getItemName(id)} ×${count}`).join(', ') || 'None'}`,
+        progress?.materials && `Planks · ${progress.materials.available} available / ${progress.materials.required - (progress.placed ?? 0)} still needed`,
+        progress?.plan && `Construction · ${progress.placed ?? 0}/${progress.plan.blocks.length} blocks`,
+        next.shelters?.length > 0 && `Shelters · ${next.shelters.map(site => coords(site.position)).join(', ')}`,
         `Equipped · ${B.getItemName(next.equippedTool) || 'None'}`,
         craftOutcome && `Last craft · ${craftOutcome.outcome}`,
         toolOutcome && `Last tool use · ${toolOutcome.outcome}`,
@@ -88,6 +92,7 @@ export function createExplorerView(scene, world, player, resumeGame) {
         objective && `${objective.source === 'llm' ? 'Model reason' : 'Reason'} · ${objective.reason}`,
         objective?.site && `Remembered site · ${coords(objective.site)}`,
         recent.length > 0 && `Decision context · ${recent.map(entry => entry.outcome).join(' / ')}`,
+        setback && `Recent setback · ${setback.outcome}`,
         outcome && `Latest outcome · ${outcome.status} / ${outcome.label} / ${outcome.detail}`,
         `Last successful LLM decision · ${lastAI ? new Date(lastAI.at).toLocaleString() : 'None yet'}`,
         `Inventory · ${items.join(', ') || 'Empty'}`,

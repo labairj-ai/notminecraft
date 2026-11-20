@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import * as B from '../src/blocks.js';
 import { RECIPES } from '../src/crafting.js';
-import { craft, PICKAXE_GOAL } from './crafting.js';
+import { craft, PICKAXE_GOAL, supplyStep } from './crafting.js';
+import { findShelter, SHELTER_GOAL, shelterPlan, validShelter } from './shelter.js';
 import { createExplorerWorld, positionKey } from './world.js';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -294,6 +295,126 @@ test('A saved crafting goal with unavailable wood fails honestly and yields to a
     assert.ok(!failed.memory.some(e => e.action === 'craft' && e.result === 'success'));
     const next = await waitFor(readState, s => s.objective?.kind !== 'craft');
     assert.ok(next.craftRetryAt > next.tick);
+  } finally {
+    await stop();
+    cleanup();
+  }
+});
+
+test('Shelter survey rejects an obstructed footprint and respects remembered rejections', () => {
+  const center = { x: -2, y: 34, z: 14 };
+  const world = createExplorerWorld(4242, {});
+  const { queue } = world.survey(center, {}, 24);
+  const baseline = findShelter(world, queue, {}).plan;
+  assert.deepEqual(baseline.center, center);
+  const blocker = positionKey({ ...center, y: center.y + 2 });
+  const altered = createExplorerWorld(4242, {}, { [blocker]: B.CRAFTING });
+  assert.equal(validShelter(altered, baseline), false);
+  const chosen = findShelter(altered, queue, {});
+  assert.ok(chosen.unsuitable.includes(positionKey(center)));
+  assert.ok(chosen.plan);
+  assert.notDeepEqual(chosen.plan.center, center);
+  const remembered = findShelter(world, queue, { [positionKey(center)]: true });
+  assert.notDeepEqual(remembered.plan.center, center);
+  assert.equal(altered.getBlock(...blocker.split(',').map(Number)), B.CRAFTING);
+});
+
+test('Explorer gathers missing wood, crafts planks, and resumes block-by-block shelter construction', async () => {
+  const prompts = [];
+  const model = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const part of req) chunks.push(part);
+    const prompt = JSON.parse(JSON.parse(Buffer.concat(chunks)).messages[1].content);
+    prompts.push(prompt);
+    const choice = prompt.options.findIndex(option => option.kind === 'shelter');
+    res.end(JSON.stringify({ model: 'shelter-test', choices: [{ message: { content: JSON.stringify({ choice, reason: 'A level site is reachable and building materials are within reach.' }) } }] }));
+  });
+  await new Promise(resolve => model.listen(0, '127.0.0.1', resolve));
+  const { start, readState, stop, statePath, cleanup } = agentFixture({
+    AGENT_LLM: 'on', LLM_URL: `http://127.0.0.1:${model.address().port}/v1/chat/completions`
+  });
+  const origin = { x: -2, y: 34, z: 14 };
+  const oldPlacement = '-9,36,0';
+  const oldRemoval = '3,30,14';
+  const savedEdits = { [oldPlacement]: B.CRAFTING };
+  try {
+    writeFileSync(statePath, JSON.stringify({
+      ...origin, seed: 4242, version: 2, tick: 0, energy: 100,
+      inventory: [{ id: B.WOOD, count: 5 }], memory: [], visited: {}, obstacles: {},
+      failedDestinations: {}, discoveries: [], placedBlocks: savedEdits, removedBlocks: { [oldRemoval]: B.WOOD }
+    }));
+    assert.deepEqual(supplyStep([{ id: B.WOOD, count: 5 }], B.PLANKS, 23).missing, [{ id: B.WOOD, count: 1 }]);
+    await start(100);
+    const mid = await waitFor(readState, s => s.objective?.progress?.placed >= 7, 28000);
+    assert.equal(mid.objective.label, SHELTER_GOAL);
+    assert.ok(prompts[0].options.some(option => option.kind === 'explore'));
+    assert.ok(prompts[0].options.some(option => option.kind === 'gather'));
+    assert.equal(countPlanks(mid), 24 - mid.objective.progress.placed);
+    const gathered = mid.memory.find(e => e.action === 'mine' && e.block.id === B.WOOD);
+    assert.ok(gathered);
+    assert.notDeepEqual({x:gathered.x,y:gathered.y,z:gathered.z}, origin);
+    assert.equal(mid.removedBlocks[positionKey(gathered.block)], B.WOOD);
+    assert.equal(createExplorerWorld(4242, {}).getBlock(gathered.block.x, gathered.block.y, gathered.block.z), B.WOOD);
+    assert.equal(mid.placedBlocks[oldPlacement], B.CRAFTING);
+    assert.equal(mid.removedBlocks[oldRemoval], B.WOOD);
+    await stop();
+    const saved = JSON.parse(readFileSync(statePath, 'utf8'));
+    assert.deepEqual(await start(120), { ...saved, online: true });
+
+    const completed = await waitFor(readState, s => s.shelters?.length || s.objective?.status === 'failed');
+    assert.equal(completed.lastObjectiveOutcome.status, 'completed', JSON.stringify(completed.lastObjectiveOutcome));
+    const { plan, placed } = completed.objective.progress;
+    assert.equal(placed, 23);
+    assert.equal(countPlanks(completed), 1);
+    assert.equal(Object.keys(completed.placedBlocks).length, 24);
+    assert.equal(completed.placedBlocks[oldPlacement], B.CRAFTING);
+    assert.equal(completed.removedBlocks[oldRemoval], B.WOOD);
+    assert.equal(prompts.length, 1);
+    const persisted = createExplorerWorld(completed.seed, completed.removedBlocks, completed.placedBlocks);
+    assert.ok(validShelter(persisted, plan, placed));
+    assert.ok(persisted.stepTo(plan.outside, plan.entrance.x, plan.entrance.z));
+    assert.ok(persisted.stepTo(plan.entrance, plan.center.x, plan.center.z));
+    assert.ok(completed.memory.some(entry => /Verified shelter/.test(entry.outcome)));
+    await stop();
+    const final = JSON.parse(readFileSync(statePath, 'utf8'));
+    assert.deepEqual(await start(5000), { ...final, online: true });
+    console.log(`Built and verified ${placed} blocks at ${positionKey(plan.center)}; acquired one missing log and retained prior edits`);
+  } finally {
+    await stop();
+    await new Promise(resolve => model.close(resolve));
+    cleanup();
+  }
+});
+
+function countPlanks(state) {
+  return state.inventory.filter(item => item.id === B.PLANKS).reduce((sum, item) => sum + item.count, 0);
+}
+
+test('Shelter with unreachable wood makes no placements and records the unmet prerequisite', async () => {
+  const { start, readState, stop, statePath, cleanup } = agentFixture();
+  try {
+    const origin = { x: -2, y: 34, z: 14 };
+    const world = createExplorerWorld(4242, {});
+    const { queue } = world.survey(origin, {});
+    const failedDestinations = {};
+    for (const { position } of queue) {
+      failedDestinations[positionKey(position)] = true;
+      for (const block of world.resources(position)) {
+        if (block.id === B.WOOD) failedDestinations[positionKey(block)] = true;
+      }
+    }
+    writeFileSync(statePath, JSON.stringify({
+      ...origin, seed: 4242, version: 2, tick: 0, energy: 100, inventory: [],
+      memory: [], visited: {}, obstacles: {}, failedDestinations, discoveries: [],
+      objective: { kind: 'shelter', label: SHELTER_GOAL, status: 'active', progress: { completed: [], searches: 0 } }
+    }));
+    await start(120);
+    const failed = await waitFor(readState, state => state.lastObjectiveOutcome?.status === 'failed');
+    assert.match(failed.lastObjectiveOutcome.detail, /Missing wood/);
+    assert.deepEqual(failed.objective.progress.missing, [{ id: B.WOOD, count: 6 }]);
+    assert.deepEqual(failed.placedBlocks, {});
+    assert.deepEqual(failed.inventory, []);
+    assert.ok(failed.shelterRetryAt > failed.tick);
   } finally {
     await stop();
     cleanup();

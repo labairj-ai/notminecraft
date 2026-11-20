@@ -25,32 +25,54 @@ export function takeItems(inventory, id, count) {
   return true;
 }
 
-// Select the actual wooden recipe. The stone recipe uses the same output ID.
-const pickaxe = RECIPES.find(recipe => recipe.result.id === B.TOOL_PICKAXE && recipe.rows[0].includes(B.PLANKS));
-const planks = RECIPES.find(recipe => recipe.result.id === B.PLANKS);
-const sticks = RECIPES.find(recipe => recipe.result.id === B.STICK);
-const table = RECIPES.find(recipe => recipe.result.id === B.CRAFTING);
+// The two basic pickaxe recipes share an item ID and stats. Explorer uses wood.
+const recipes = new Map(RECIPES.filter(recipe =>
+  [B.PLANKS, B.STICK, B.CRAFTING].includes(recipe.result.id) ||
+  (recipe.result.id === B.TOOL_PICKAXE && recipe.rows[0].includes(B.PLANKS))
+).map(recipe => [recipe.result.id, recipe]));
 
-const ingredients = recipe => (recipe.ingredients ?? recipe.rows.flat()).filter(id => id != null);
-const amount = (recipe, id) => ingredients(recipe).filter(item => item === id).length;
+export function supplyStep(inventory, id, count, tableAvailable = false) {
+  const stock = new Map(inventory.map(slot => [slot.id, countItem(inventory, slot.id)]));
+  const missing = new Map();
+  let first;
+  let tableReady = tableAvailable;
+
+  function ensure(item, required) {
+    const have = stock.get(item) ?? 0;
+    const recipe = recipes.get(item);
+    if (have >= required) return;
+    if (!recipe) {
+      missing.set(item, (missing.get(item) ?? 0) + required - have);
+      stock.set(item, required);
+      first ??= { kind: 'gather', item };
+      return;
+    }
+    const placeTable = recipe.size === 3 && !tableReady;
+    if (placeTable) {
+      ensure(B.CRAFTING, 1);
+      stock.set(B.CRAFTING, stock.get(B.CRAFTING) - 1);
+      tableReady = true;
+    }
+    const batches = Math.ceil((required - have) / recipe.result.count);
+    const ingredients = (recipe.ingredients ?? recipe.rows.flat()).filter(id => id != null);
+    for (let batch = 0; batch < batches; batch++) {
+      for (const ingredient of new Set(ingredients)) {
+        const units = ingredients.filter(id => id === ingredient).length;
+        ensure(ingredient, units);
+        stock.set(ingredient, stock.get(ingredient) - units);
+      }
+      first ??= placeTable ? { kind: 'place' } : { kind: 'craft', recipe };
+    }
+    stock.set(item, have + batches * recipe.result.count);
+  }
+
+  ensure(id, count);
+  return { ...(first ?? { kind: 'ready' }), missing: [...missing].map(([id, count]) => ({ id, count })) };
+}
 
 export function pickaxeStep(inventory, tableAvailable) {
-  if (countItem(inventory, B.TOOL_PICKAXE)) return { kind: 'equip', missing: [] };
-
-  const needSticks = countItem(inventory, B.STICK) < amount(pickaxe, B.STICK);
-  const needTable = !tableAvailable && !countItem(inventory, B.CRAFTING);
-  const requiredPlanks = amount(pickaxe, B.PLANKS) +
-    (needSticks ? amount(sticks, B.PLANKS) : 0) + (needTable ? amount(table, B.PLANKS) : 0);
-  const lackingPlanks = Math.max(0, requiredPlanks - countItem(inventory, B.PLANKS));
-  const lackingLogs = Math.max(0, Math.ceil(lackingPlanks / planks.result.count) - countItem(inventory, B.WOOD));
-  const missing = lackingLogs ? [{ id: B.WOOD, count: lackingLogs }] : [];
-
-  if (lackingPlanks && countItem(inventory, B.WOOD)) return { kind: 'craft', recipe: planks, missing };
-  if (lackingPlanks) return { kind: 'gather', missing };
-  if (needSticks) return { kind: 'craft', recipe: sticks, missing };
-  if (needTable) return { kind: 'craft', recipe: table, missing };
-  if (!tableAvailable) return { kind: 'place', missing };
-  return { kind: 'craft', recipe: pickaxe, missing };
+  const step = supplyStep(inventory, B.TOOL_PICKAXE, 1, tableAvailable);
+  return step.kind === 'ready' ? { ...step, kind: 'equip' } : step;
 }
 
 export function craft(inventory, recipe, gridSize) {

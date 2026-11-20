@@ -147,7 +147,7 @@ export const BLOCK_DEFS = [
 // ── Tool definitions ───────────────────────────────────────────────────────────
 // speed: multiplier on break time (higher = faster). damage: melee dmg dealt.
 export const TOOL_DEFS = {
-  [TOOL_PICKAXE]:         { name:'Stone Pickaxe', toolAction:'mine',  isItem:true, maxStack:1, speed:1.0, damage:1 },
+  [TOOL_PICKAXE]:         { name:'Pickaxe', toolAction:'mine',  isItem:true, maxStack:1, speed:1.0, damage:1 },
   [TOOL_AXE]:             { name:'Stone Axe',     toolAction:'chop',  isItem:true, maxStack:1, speed:1.0, damage:1 },
   [TOOL_SHOVEL]:          { name:'Stone Shovel',  toolAction:'dig',   isItem:true, maxStack:1, speed:1.0, damage:1 },
   [TOOL_SWORD]:           { name:'Stone Sword',   toolAction:'swing', isItem:true, maxStack:1, speed:1.0, damage:2 },
