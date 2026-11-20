@@ -49,6 +49,8 @@ export function createExplorerView(scene, world, player) {
       const memory = next.memory?.at(-1)?.outcome || 'Starting';
       info.textContent = `${next.name} | ${next.action} | Energy ${next.energy} | ${memory} | ${next.updatedAt}`;
     } catch {
+      snapshot = null;
+      group.visible = false;
       info.textContent = 'Explorer offline. Run npm run agent locally, then reload.';
       visit.disabled = true;
     } finally {
